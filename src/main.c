@@ -10,7 +10,7 @@
 #include "types.h"
 #include "utils.h"
 #include "sha256.h"
-#include "strings.h"
+#include "symbols.h"
 
 static const char JSON_FILE_EXTENSION[] = "json";
 static const char HTTPS_SCHEME[] = "https://";

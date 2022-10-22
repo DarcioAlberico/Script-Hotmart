@@ -1,4 +1,4 @@
-name: Java Ci
+name: Build
 
 on:
   push:
@@ -35,7 +35,6 @@ jobs:
         echo "LLVM_MINGW_HOME=$(dirname "${LLVM_MINGW_TARBALL}")/$(basename "${LLVM_MINGW_URL}" '.tar.xz')" >> "${GITHUB_ENV}"
     - name: Build with CMake
       run: |
-        
         declare -r MACHINE_HOST="$(gcc -dumpmachine)"
         
         declare -r targets=(

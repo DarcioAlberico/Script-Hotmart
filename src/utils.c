@@ -3,7 +3,7 @@
 #include <string.h>
 #include <ctype.h>
 
-#include "strings.h"
+#include "symbols.h"
 
 char* get_configuration_directory(void) {
 	
