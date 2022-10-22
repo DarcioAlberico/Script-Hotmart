@@ -1,7 +1,4 @@
 #include <stdlib.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <sys/prctl.h>
 
 #include <curl/curl.h>
 #include <jansson.h>
@@ -13,11 +10,7 @@
 #include "types.h"
 #include "utils.h"
 #include "sha256.h"
-
-static const char DOT[] = ".";
-static const char SLASH[] = "/";
-static const char SPACE[] = " ";
-static const char QUOTATION_MARK[] = "\"";
+#include "strings.h"
 
 static const char JSON_FILE_EXTENSION[] = "json";
 static const char HTTPS_SCHEME[] = "https://";
@@ -25,87 +18,51 @@ static const char HTTPS_SCHEME[] = "https://";
 static const char APP_CONFIG_DIRECTORY[] = ".config";
 
 static const char HTTP_HEADER_AUTHORIZATION[] = "Authorization";
+static const char HTTP_HEADER_REFERER[] = "Referer";
+static const char HTTP_HEADER_CLUB[] = "Club";
+
 static const char HTTP_HEADER_SEPARATOR[] = ": ";
 
 static const char* const HOSTNAMES[] = {
 	"dns.google:443:8.8.8.8",
-	"dns.google:443:8.8.4.4"
+	"dns.google:443:8.8.4.4",
+	"api-club.hotmart.com:443:52.72.91.225",
+	"api-sec-vlc.hotmart.com:443:52.86.213.242",
+	"api.sparkleapp.com.br:443:44.196.224.29",
+	"hotmart.s3.amazonaws.com:443:52.217.37.220"
 };
 
 static const char HOTMART_CLUB_SUFFIX[] = ".club.hotmart.com";
 
-#ifdef _WIN32
-	static const char PATH_SEPARATOR[] = "\\";
-#else
-	static const char PATH_SEPARATOR[] = "/";
-#endif
+#define HOTMART_API_CLUB_PREFIX "https://api-club.hotmart.com/hot-club-api/rest/v3"
+#define HOTMART_API_SEC_PREFIX "https://api-sec-vlc.hotmart.com"
+#define SPARKLEAPP_API_PREFIX "https://api.sparkleapp.com.br"
+
+static const char HOTMART_NAVIGATION_ENDPOINT[] = 
+	HOTMART_API_CLUB_PREFIX
+	"/navigation";
+
+static const char HOTMART_MEMBERSHIP_ENDPOINT[] = 
+	HOTMART_API_CLUB_PREFIX
+	"/membership";
+
+static const char HOTMART_PAGE_ENDPOINT[] = 
+	HOTMART_API_CLUB_PREFIX
+	"/page";
+
+static const char HOTMART_ATTACHMENT_ENDPOINT[] = 
+	HOTMART_API_CLUB_PREFIX
+	"/attachment";
+
+static const char HOTMART_TOKEN_ENDPOINT[] = 
+	SPARKLEAPP_API_PREFIX
+	"/oauth/token";
+
+static const char HOTMART_TOKEN_CHECK_ENDPOINT[] = 
+	HOTMART_API_SEC_PREFIX
+	"/security/oauth/check_token";
 
 #define MAX_INPUT_SIZE 1024
-
-struct Credentials {
-	char* access_token;
-	char* refresh_token;
-	int expires_in;
-};
-
-struct Media {
-	char* url;
-};
-
-struct Medias {
-	size_t offset;
-	size_t size;
-	struct Media* items;
-};
-
-struct Attachment {
-	char* url;
-};
-
-struct Attachments {
-	size_t offset;
-	size_t size;
-	struct Attachment* items;
-};
-
-struct Page {
-	char* id;
-	char* name;
-	struct Medias medias;
-	struct Attachments attachments;
-};
-
-struct Pages {
-	size_t offset;
-	size_t size;
-	struct Page* items;
-};
-
-struct Module {
-	char* id;
-	char* name;
-	char* download_location;
-	struct Pages pages;
-};
-
-struct Modules {
-	size_t offset;
-	size_t size;
-	struct Module* items;
-};
-
-struct Resource {
-	char* name;
-	char* subdomain;
-	char* download_location;
-	struct Modules modules;
-};
-
-struct Resources {
-	size_t offset;
-	size_t size;
-	struct Resource* items;
-};
 
 static CURL* curl = NULL;
 
@@ -149,7 +106,7 @@ static int authorize(
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
-	curl_easy_setopt(curl, CURLOPT_URL, "https://api.sparkleapp.com.br/oauth/token");
+	curl_easy_setopt(curl, CURLOPT_URL, HOTMART_TOKEN_ENDPOINT);
 	
 	if (curl_easy_perform(curl) != CURLE_OK) {
 		return UERR_CURL_FAILURE;
@@ -224,7 +181,7 @@ static int get_resources(
 	struct Resources* resources
 ) {
 	
-	struct Query query = {};
+	struct Query query = {0};
 	
 	add_parameter(&query, "token", credentials->access_token);
 	
@@ -238,7 +195,7 @@ static int get_resources(
 	}
 	
 	CURLU *cu = curl_url();
-	curl_url_set(cu, CURLUPART_URL, "https://api-sec-vlc.hotmart.com/security/oauth/check_token", 0);
+	curl_url_set(cu, CURLUPART_URL, HOTMART_TOKEN_CHECK_ENDPOINT, 0);
 	curl_url_set(cu, CURLUPART_QUERY, squery, 0);
 	
 	char* url = NULL;
@@ -288,7 +245,7 @@ static int get_resources(
 	json_t *item = NULL;
 	const size_t array_size = json_array_size(obj);
 	
-	curl_easy_setopt(curl, CURLOPT_URL, "https://api-club.hotmart.com/hot-club-api/rest/v3/membership");
+	curl_easy_setopt(curl, CURLOPT_URL, HOTMART_MEMBERSHIP_ENDPOINT);
 	
 	resources->size = sizeof(struct Resource) * array_size;
 	resources->items = malloc(resources->size);
@@ -325,8 +282,8 @@ static int get_resources(
 		const char* const subdomain = json_string_value(obj);
 		
 		const char* const headers[][2] = {
-			{"Authorization", authorization},
-			{"Club", subdomain}
+			{HTTP_HEADER_AUTHORIZATION, authorization},
+			{HTTP_HEADER_CLUB, subdomain}
 		};
 		
 		struct curl_slist* list = NULL;
@@ -409,8 +366,8 @@ static int get_modules(
 	strcat(authorization, credentials->access_token);
 	
 	const char* const headers[][2] = {
-		{"Authorization", authorization},
-		{"Club", resource->subdomain}
+		{HTTP_HEADER_AUTHORIZATION, authorization},
+		{HTTP_HEADER_CLUB, resource->subdomain}
 	};
 	
 	struct curl_slist* list = NULL;
@@ -439,7 +396,7 @@ static int get_modules(
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-	curl_easy_setopt(curl, CURLOPT_URL, "https://api-club.hotmart.com/hot-club-api/rest/v3/navigation");
+	curl_easy_setopt(curl, CURLOPT_URL, HOTMART_NAVIGATION_ENDPOINT);
 	
 	if (curl_easy_perform(curl) != CURLE_OK) {
 		return UERR_CURL_FAILURE;
@@ -471,7 +428,7 @@ static int get_modules(
 	json_t *item = NULL;
 	const size_t array_size = json_array_size(obj);
 	
-	curl_easy_setopt(curl, CURLOPT_URL, "https://api-club.hotmart.com/hot-club-api/rest/v3/membership");
+	curl_easy_setopt(curl, CURLOPT_URL, HOTMART_MEMBERSHIP_ENDPOINT);
 	
 	resource->modules.size = sizeof(struct Module) * array_size;
 	resource->modules.items = malloc(resource->modules.size);
@@ -598,9 +555,9 @@ static int get_page(
 	strcat(authorization, credentials->access_token);
 	
 	const char* const headers[][2] = {
-		{"Authorization", authorization},
-		{"Club", resource->subdomain},
-		{"Referer", "https://hotmart.com"}
+		{HTTP_HEADER_AUTHORIZATION, authorization},
+		{HTTP_HEADER_CLUB, resource->subdomain},
+		{HTTP_HEADER_REFERER, "https://hotmart.com"}
 	};
 	
 	struct curl_slist* list = NULL;
@@ -630,10 +587,8 @@ static int get_page(
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
 	
-	const char* const endpoint = "https://api-club.hotmart.com/hot-club-api/rest/v3/page";
-	
-	char url[strlen(endpoint) + strlen(SLASH) + strlen(page->id) + 1];
-	strcpy(url, endpoint);
+	char url[strlen(HOTMART_PAGE_ENDPOINT) + strlen(SLASH) + strlen(page->id) + 1];
+	strcpy(url, HOTMART_PAGE_ENDPOINT);
 	strcat(url, SLASH);
 	strcat(url, page->id);
 	
@@ -768,10 +723,8 @@ static int get_page(
 			
 			const char* const id = json_string_value(obj);
 			
-			const char* const endpoint = "https://api-club.hotmart.com/hot-club-api/rest/v3/attachment";
-			
-			char url[strlen(endpoint) + strlen(SLASH) + strlen(id) + strlen(SLASH) + 8 + 1];
-			strcpy(url, endpoint);
+			char url[strlen(HOTMART_ATTACHMENT_ENDPOINT) + strlen(SLASH) + strlen(id) + strlen(SLASH) + 8 + 1];
+			strcpy(url, HOTMART_ATTACHMENT_ENDPOINT);
 			strcat(url, SLASH);
 			strcat(url, id);
 			strcat(url, SLASH);
@@ -990,7 +943,7 @@ int b() {
 			if (isnumeric(answer)) {
 				value = atoi(answer);
 				
-				if (value >= 0 && value <= resources.offset) {
+				if (value >= 0 && (size_t) value <= resources.offset) {
 					break;
 				}
 			}

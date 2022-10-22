@@ -3,6 +3,55 @@
 #include <string.h>
 #include <ctype.h>
 
+#include "strings.h"
+
+char* get_configuration_directory(void) {
+	
+	#ifdef _WIN32
+		const char* const directory = getenv("APPDATA");
+		
+		if (directory == NULL) {
+			return NULL;
+		}
+	#else
+		const char* const directory = getenv("XDG_CONFIG_HOME");
+		
+		if (directory == NULL) {
+			const char* const config = ".config";
+			const char* const home = getenv("HOME");
+			
+			char* configuration_directory = malloc(strlen(home) + strlen(SLASH) + strlen(config) + strlen(SLASH) + 1);
+			
+			if (configuration_directory == NULL) {
+				return NULL;
+			}
+			
+			strcpy(configuration_directory, home);
+			strcat(configuration_directory, SLASH);
+			strcat(configuration_directory, config);
+			strcat(configuration_directory, SLASH);
+			
+			return configuration_directory;
+		}
+	#endif
+	
+	const int trailing_separator = strlen(directory) > 0 && *(strchr(directory, '\0') - 1) == *PATH_SEPARATOR;
+	char* configuration_directory = malloc(strlen(directory) + (trailing_separator ? 0 : strlen(PATH_SEPARATOR)) + 1);
+	
+	if (configuration_directory == NULL) {
+		return NULL;
+	}
+	
+	strcpy(configuration_directory, directory);
+	
+	if (!trailing_separator) {
+		strcat(configuration_directory, PATH_SEPARATOR);
+	}
+	
+	return configuration_directory;
+	
+}
+		
 #ifdef _WIN32
 	#ifdef UNICODE
 		#undef UNICODE
@@ -20,10 +69,6 @@
 	#include <errno.h>
 	#include <glob.h>
 #endif
-
-static const char SLASH = '/';
-static const char BACKSLASH = '\\';
-static const char COLON = ':';
 
 static const char INVALID_FILENAME_CHARS[] = {
 	' ', '/', '\\', ':', '*', '?', '\"', '<', '>', '|', '^', '\x00'
@@ -126,9 +171,9 @@ int directory_exists(const char* const directory) {
 int is_absolute(const char* const path) {
 	
 	#ifdef _WIN32
-		return ((*path == SLASH  || *path == BACKSLASH) || (strlen(path) > 1 && isalpha(*path) && path[1] == COLON));
+		return ((*path == PATH_SEPARATOR || (strlen(path) > 1 && isalpha(*path) && path[1] == *COLON));
 	#else
-		return (*path == SLASH);
+		return (*path == *PATH_SEPARATOR);
 	#endif
 	
 }
@@ -143,11 +188,6 @@ static int raw_create_dir(const char* const directory) {
 	
 }
 
-static int is_separator(const char c) {
-	return (c == SLASH || c == BACKSLASH);
-}
-
-
 int create_directory(const char* const directory) {
 	
 	int omit_next = 0;
@@ -161,7 +201,7 @@ int create_directory(const char* const directory) {
 	for (size_t index = 1; index < strlen(directory) + 1; index++) {
 		const char* const ch = &directory[index];
 		
-		if (!(is_separator(*ch) || (*ch == '\0' && index > 1 && !is_separator(*(ch - 1))))) {
+		if (!(*ch == *PATH_SEPARATOR || (*ch == '\0' && index > 1 && *(ch - 1) != *PATH_SEPARATOR))) {
 			continue;
 		}
 		
