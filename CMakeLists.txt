@@ -363,6 +363,20 @@ add_executable(
 	src/utils.c
 )
 
+if (ANDROID)
+	target_include_directories(
+		sparklec
+		AFTER
+		src/android
+	)
+	
+	target_sources(
+		sparklec
+		PRIVATE
+		src/android/glob.c
+	)
+endif()
+
 set_target_properties(
 	libcurl
 	PROPERTIES
