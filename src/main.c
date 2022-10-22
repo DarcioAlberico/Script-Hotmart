@@ -64,22 +64,6 @@ static const char HOTMART_TOKEN_CHECK_ENDPOINT[] =
 	HOTMART_API_SEC_PREFIX
 	"/security/oauth/check_token";
 
-const char* const command[][2] = {
-	{"ffmpeg", "-y"},
-	{"-loglevel", "error"},
-	{"-icy", "0"},
-	{"-loglevel", "error"},
-	{"-multiple_requests", "1"},
-	{"-reconnect_streamed", "1"},
-	{"-reconnect_on_network_error", "1"},
-	{"-reconnect_on_http_error", "4xx,5xx"},
-	{"-reconnect_delay_max", "2"},
-	{"-i", NULL},
-	{"-c", "copy"},
-	{"-movflags", "+faststart"},
-	{"-map_metadata", "-1"}
-};
-
 #define MAX_INPUT_SIZE 1024
 
 static CURL* curl = NULL;
@@ -796,7 +780,12 @@ static int get_page(
 }
 
 int b() {
-	execute_shell_command("ls");
+	
+	#ifdef _WIN32
+		SetConsoleOutputCP(CP_UTF8);
+		SetConsoleCP(CP_UTF8);
+	#endif
+	
 	if (!directory_exists(APP_CONFIG_DIRECTORY)) {
 		fprintf(stderr, "- Diretório de configurações não encontrado, criando-o\r\n");
 		
