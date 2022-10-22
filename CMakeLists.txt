@@ -353,6 +353,16 @@ set(BEARSSL_LIBRARY $<TARGET_FILE:bearssl>)
 add_subdirectory(submodules/curl EXCLUDE_FROM_ALL)
 add_subdirectory(submodules/jansson EXCLUDE_FROM_ALL)
 
+add_executable(
+	sparklec
+	src/callbacks.c
+	src/main.c
+	src/query.c
+	src/sha256.c
+	src/types.c
+	src/utils.c
+)
+
 set_target_properties(
 	libcurl
 	PROPERTIES
@@ -362,17 +372,7 @@ set_target_properties(
 set_target_properties(
 	jansson
 	PROPERTIES
-	LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:unalix>
-)
-
-add_executable(
-	sparklec
-	src/callbacks.c
-	src/main.c
-	src/query.c
-	src/sha256.c
-	src/types.c
-	src/utils.c
+	LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
 )
 
 target_link_libraries(
