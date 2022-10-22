@@ -1,1 +1,1 @@
-int sha256_digest(const char* const data, char* dst);
+void sha256_digest(const char* const s, char* dst);

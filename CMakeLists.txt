@@ -10,6 +10,8 @@ project(
 
 option(SPARKLEC_ENABLE_LTO "Turn on compiler Link Time Optimizations" OFF)
 
+set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
+
 # curl
 set(PICKY_COMPILER OFF)
 set(BUILD_CURL_EXE OFF)
@@ -401,6 +403,7 @@ if (SPARKLEC_ENABLE_LTO)
 	check_ipo_supported(RESULT SPARKLEC_HAS_LTO LANGUAGES C)
 	
 	if (SPARKLEC_HAS_LTO)
+		
 		foreach(target sparklec bearssl jansson libcurl)
 			set_target_properties(
 				${target}

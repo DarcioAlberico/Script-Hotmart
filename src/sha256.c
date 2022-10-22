@@ -4,7 +4,7 @@
 
 #include "utils.h"
 
-char* sha256_digest(const char* const s, char* dst) {
+void sha256_digest(const char* const s, char* dst) {
 	
 	br_sha256_context context = {0};
 	br_sha256_init(&context);
@@ -23,7 +23,5 @@ char* sha256_digest(const char* const s, char* dst) {
 	}
 	
 	dst[dst_offset] = '\0';
-	
-	return dst;
 	
 }
