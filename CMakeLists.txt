@@ -369,11 +369,13 @@ set_target_properties(
 	IMPORTED_LOCATION $<TARGET_FILE:bearssl>
 )
 
-set_target_properties(
-	jansson
-	PROPERTIES
-	LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
-)
+foreach(target jansson libcurl)
+	set_target_properties(
+		${target}
+		PROPERTIES
+		LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
+	)
+endforeach()
 
 target_link_libraries(
 	sparklec
