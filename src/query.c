@@ -2,7 +2,7 @@
 #include <string.h>
 
 #include "query.h"
-#include "strings.h"
+#include "symbols.h"
 #include "errors.h"
 
 static int put_parameter(struct Query* obj, const struct Parameter parameter) {
