@@ -8,6 +8,8 @@ project(
 	LANGUAGES C
 )
 
+option(SPARKLEC_ENABLE_LTO "Turn on compiler Link Time Optimizations" OFF)
+
 # curl
 set(PICKY_COMPILER OFF)
 set(BUILD_CURL_EXE OFF)
@@ -391,6 +393,23 @@ foreach(target jansson libcurl)
 		LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
 	)
 endforeach()
+
+if (SPARKLEC_ENABLE_LTO)
+	set(SPARKLEC_HAS_LTO OFF)
+	
+	include(CheckIPOSupported)
+	check_ipo_supported(RESULT SPARKLEC_HAS_LTO LANGUAGES C)
+	
+	if (SPARKLEC_HAS_LTO)
+		foreach(target sparklec bearssl jansson libcurl)
+			set_target_properties(
+				${target}
+				PROPERTIES
+				INTERPROCEDURAL_OPTIMIZATION TRUE
+			)
+		endforeach()
+	endif()
+endif()
 
 target_link_libraries(
 	sparklec
