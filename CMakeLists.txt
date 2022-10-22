@@ -1,7 +1,7 @@
 cmake_minimum_required(VERSION 3.13)
 
 project(
-	UbookDL
+	SparkleC
 	VERSION 0.1
 	DESCRIPTION "Tiny CLI tool to download courses from Hotmart"
 	HOMEPAGE_URL "https://github.com/Kartatz/SparkleC"
@@ -388,13 +388,23 @@ set_target_properties(
 	IMPORTED_LOCATION $<TARGET_FILE:bearssl>
 )
 
-foreach(target jansson libcurl)
-	set_target_properties(
-		${target}
-		PROPERTIES
-		LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
-	)
-endforeach()
+if (WINDOWS)
+	foreach(target jansson libcurl)
+		set_target_properties(
+			${target}
+			PROPERTIES
+			RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
+		)
+	endforeach()
+else()
+	foreach(target jansson libcurl)
+		set_target_properties(
+			${target}
+			PROPERTIES
+			LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
+		)
+	endforeach()
+endif()
 
 if (SPARKLEC_ENABLE_LTO)
 	set(SPARKLEC_HAS_LTO OFF)
