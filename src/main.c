@@ -11,8 +11,11 @@
 #include "utils.h"
 #include "sha256.h"
 #include "symbols.h"
+#include "cacert.h"
 
 static const char JSON_FILE_EXTENSION[] = "json";
+static const char MP4_FILE_EXTENSION[] = "mp4";
+
 static const char HTTPS_SCHEME[] = "https://";
 
 static const char APP_CONFIG_DIRECTORY[] = ".config";
@@ -20,12 +23,11 @@ static const char APP_CONFIG_DIRECTORY[] = ".config";
 static const char HTTP_HEADER_AUTHORIZATION[] = "Authorization";
 static const char HTTP_HEADER_REFERER[] = "Referer";
 static const char HTTP_HEADER_CLUB[] = "Club";
+static const char HTTP_DEFAULT_USER_AGENT[] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36";
 
 static const char HTTP_HEADER_SEPARATOR[] = ": ";
 
 static const char* const HOSTNAMES[] = {
-	"dns.google:443:8.8.8.8",
-	"dns.google:443:8.8.4.4",
 	"api-club.hotmart.com:443:52.72.91.225",
 	"api-sec-vlc.hotmart.com:443:52.86.213.242",
 	"api.sparkleapp.com.br:443:44.196.224.29",
@@ -61,6 +63,22 @@ static const char HOTMART_TOKEN_ENDPOINT[] =
 static const char HOTMART_TOKEN_CHECK_ENDPOINT[] = 
 	HOTMART_API_SEC_PREFIX
 	"/security/oauth/check_token";
+
+const char* const command[][2] = {
+	{"ffmpeg", "-y"},
+	{"-loglevel", "error"},
+	{"-icy", "0"},
+	{"-loglevel", "error"},
+	{"-multiple_requests", "1"},
+	{"-reconnect_streamed", "1"},
+	{"-reconnect_on_network_error", "1"},
+	{"-reconnect_on_http_error", "4xx,5xx"},
+	{"-reconnect_delay_max", "2"},
+	{"-i", NULL},
+	{"-c", "copy"},
+	{"-movflags", "+faststart"},
+	{"-map_metadata", "-1"}
+};
 
 #define MAX_INPUT_SIZE 1024
 
@@ -540,7 +558,8 @@ static int get_modules(
 		resource->modules.items[resource->modules.offset++] = module;
 	}
 	
-	return 0;
+	return UERR_SUCCESS;
+	
 }
 
 static int get_page(
@@ -772,11 +791,12 @@ static int get_page(
 	
 	json_decref(tree);
 	
-	return 0;
+	return UERR_SUCCESS;
+	
 }
 
 int b() {
-	
+	execute_shell_command("ls");
 	if (!directory_exists(APP_CONFIG_DIRECTORY)) {
 		fprintf(stderr, "- Diretório de configurações não encontrado, criando-o\r\n");
 		
@@ -835,11 +855,18 @@ int b() {
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(curl, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
+	//curl_easy_setopt(curl, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(curl, CURLOPT_TCP_FASTOPEN, 1L);
-	curl_easy_setopt(curl, CURLOPT_USERAGENT, "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36");
-	curl_easy_setopt(curl, CURLOPT_DOH_URL, "https://1.0.0.1/dns-query");
-	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(curl, CURLOPT_USERAGENT, HTTP_DEFAULT_USER_AGENT);
+	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+	
+	struct curl_blob blob = {
+		.data = (char*) CACERT,
+		.len = strlen(CACERT),
+		.flags = CURL_BLOB_COPY
+	};
+	
+	curl_easy_setopt(curl, CURLOPT_CAINFO_BLOB, &blob);
 	
 	struct curl_slist* resolve_list = NULL;
 	
@@ -980,71 +1007,154 @@ int b() {
 	for (size_t index = 0; index < queue_count; index++) {
 		struct Resource* resource = &resources.items[index];
 		
-		printf("+ Obtendo informações sobre o produto\r\n");
+		printf("+ Obtendo lista de módulos do produto '%s'\r\n", resource->name);
 		
-		get_modules(&credentials, resource);
+		if (get_modules(&credentials, resource) != UERR_SUCCESS) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			exit(EXIT_FAILURE);
+		}
 		
-		printf("+ Verificando estado do produto '%s'\r\n", resource->name);
-		/*
 		char directory[strlen(resource->name) + 1];
 		strcpy(directory, resource->name);
-		
 		normalize_filename(directory);
 		
-		resource->download_location = malloc(strlen(cwd) + strlen(PATH_SEPARATOR) + strlen(directory) + 1);
-		strcpy(resource->download_location, cwd);
-		strcat(resource->download_location, PATH_SEPARATOR);
-		strcat(resource->download_location, directory);
+		char resource_directory[strlen(cwd) + strlen(PATH_SEPARATOR) + strlen(directory) + 1];
+		strcpy(resource_directory, cwd);
+		strcat(resource_directory, PATH_SEPARATOR);
+		strcat(resource_directory, directory);
 		
-		if (!directory_exists(resource->download_location)) {
-			fprintf(stderr, "- O diretório '%s' não existe, criando-o\r\n", resource->download_location);
+		if (!directory_exists(resource_directory)) {
+			fprintf(stderr, "- O diretório '%s' não existe, criando-o\r\n", resource_directory);
 			
-			if (!create_directory(resource->download_location)) {
+			if (!create_directory(resource_directory)) {
 				fprintf(stderr, "- Ocorreu um erro ao tentar criar o diretório!\r\n");
 				exit(EXIT_FAILURE);
 			}
 		}
-		*/
+		
 		for (size_t index = 0; index < resource->modules.offset; index++) {
 			struct Module* module = &resource->modules.items[index];
 			
 			printf("+ Verificando estado do módulo '%s'\r\n", module->name);
 			
-			printf("Module ID: %s\n", module->id);
-			printf("Module name: %s\n", module->name);
-			/*
 			char directory[strlen(module->name) + 1];
 			strcpy(directory, module->name);
-			
 			normalize_filename(directory);
 			
-			module->download_location = malloc(strlen(resource->download_location) + strlen(PATH_SEPARATOR) + strlen(directory) + 1);
-			strcpy(module->download_location, resource->download_location);
-			strcat(module->download_location, PATH_SEPARATOR);
-			strcat(module->download_location, directory);
+			char module_directory[strlen(resource_directory) + strlen(PATH_SEPARATOR) + strlen(directory) + 1];
+			strcpy(module_directory, resource_directory);
+			strcat(module_directory, PATH_SEPARATOR);
+			strcat(module_directory, directory);
 			
-			if (!directory_exists(module->download_location)) {
-				fprintf(stderr, "- O diretório '%s' não existe, criando-o\r\n", resource->download_location);
+			if (!directory_exists(module_directory)) {
+				fprintf(stderr, "- O diretório '%s' não existe, criando-o\r\n", module_directory);
 				
-				if (!create_directory(module->download_location)) {
+				if (!create_directory(module_directory)) {
 					fprintf(stderr, "- Ocorreu um erro ao tentar criar o diretório!\r\n");
 					exit(EXIT_FAILURE);
 				}
 			}
-			*/
+			
 			for (size_t index = 0; index < module->pages.offset; index++) {
 				struct Page* page = &module->pages.items[index];
 				
-				printf("Page ID: %s\n", page->id);
-				printf("Page name: %s\n", page->name);
+				printf("+ Obtendo lista de páginas do módulo '%s'\r\n", module->name);
 				
-				if (get_page(&credentials, resource, page) == -2) return 1;
+				if (get_page(&credentials, resource, page) != UERR_SUCCESS) {
+					fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+					exit(EXIT_FAILURE);
+				}
+				
+				printf("+ Verificando estado da página '%s'\r\n", page->name);
+				
+				char directory[strlen(page->name) + 1];
+				strcpy(directory, page->name);
+				normalize_filename(directory);
+				
+				char page_directory[strlen(module_directory) + strlen(PATH_SEPARATOR) + strlen(directory) + 1];
+				strcpy(page_directory, module_directory);
+				strcat(page_directory, PATH_SEPARATOR);
+				strcat(page_directory, directory);
+				
+				if (!directory_exists(page_directory)) {
+					fprintf(stderr, "- O diretório '%s' não existe, criando-o\r\n", page_directory);
+					
+					if (!create_directory(page_directory)) {
+						fprintf(stderr, "- Ocorreu um erro ao tentar criar o diretório!\r\n");
+						exit(EXIT_FAILURE);
+					}
+				}
 				
 				for (size_t index = 0; index < page->medias.offset; index++) {
 					struct Media* media = &page->medias.items[index];
 					
-					if (media->url != NULL) {
-						printf("Media URL: %s\n", media->url);
+					char filename[strlen(page->name) + 1];
+					strcpy(filename, page->name);
+					normalize_filename(filename);
+					
+					char media_filename[strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(filename) + strlen(DOT) + strlen(MP4_FILE_EXTENSION) + 1];
+					strcpy(media_filename, page_directory);
+					strcat(media_filename, PATH_SEPARATOR);
+					strcat(media_filename, filename);
+					strcat(media_filename, DOT);
+					strcat(media_filename, MP4_FILE_EXTENSION);
+					
+					if (!file_exists(media_filename)) {
+						fprintf(stderr, "- O arquivo '%s' não existe, ele será baixado\r\n", media_filename);
+						printf("+ Baixando de '%s' para '%s'\r\n", media->url, media_filename);
+						
+						char output_file[strlen(QUOTATION_MARK) * 2 + strlen(media_filename) + 1];
+						strcpy(output_file, QUOTATION_MARK);
+						strcat(output_file, media_filename);
+						strcat(output_file, QUOTATION_MARK);
+						
+						const char* const command[][2] = {
+							{"ffmpeg", NULL},
+							{"-loglevel", "error"},
+							{"-icy", "0"},
+							{"-loglevel", "error"},
+							{"-multiple_requests", "1"},
+							{"-reconnect_streamed", "1"},
+							{"-reconnect_on_network_error", "1"},
+							{"-reconnect_on_http_error", "4xx,5xx"},
+							{"-reconnect_delay_max", "2"},
+							{"-user_agent", HTTP_DEFAULT_USER_AGENT},
+							{"-headers", "Origin: https://cf-embed.play.hotmart.com"},
+							{"-i", media->url},
+							{"-c", "copy"},
+							{"-movflags", "+faststart"},
+							{"-map_metadata", "-1"},
+							{output_file, NULL}
+						};
+						
+						char command_line[5000];
+						memset(command_line, '\0', sizeof(command_line));
+						
+						for (size_t index = 0; index < sizeof(command) / sizeof(*command); index++) {
+							const char** const argument = (const char**) command[index];
+							
+							const char* const key = argument[0];
+							const char* const value = argument[1];
+							
+							if (key != NULL) {
+								strcat(command_line, key);
+							}
+							
+							strcat(command_line, SPACE);
+							
+							if (value != NULL) {
+								strcat(command_line, QUOTATION_MARK);
+								strcat(command_line, value);
+								strcat(command_line, QUOTATION_MARK);
+							}
+							
+							strcat(command_line, SPACE);
+						}
+						
+						if (execute_shell_command(command_line) != 0) {
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							exit(EXIT_FAILURE);
+						}
 					}
 				}
 				

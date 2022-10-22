@@ -5,6 +5,47 @@
 
 #include "symbols.h"
 
+#ifdef _WIN32
+	#ifdef UNICODE
+		#undef UNICODE
+	#endif
+	
+	#ifdef _UNICODE
+		#undef _UNICODE
+	#endif
+	
+	#include <windows.h>
+	#include <fileapi.h>
+#else
+	#include <unistd.h>
+	#include <sys/stat.h>
+	#include <errno.h>
+	#include <glob.h>
+#endif
+
+static const char INVALID_FILENAME_CHARS[] = {
+	' ', '/', '\\', ':', '*', '?', '\"', '<', '>', '|', '^', '\x00'
+};
+
+int execute_shell_command(const char* const command) {
+	
+	const int code = system(command);
+	int exit_code = 0;
+	
+	#ifdef _WIN32
+		exit_code = code;
+	#else
+		if (WIFSIGNALED(code)) {
+			exit_code = 128 + WTERMSIG(code);
+		} else {
+			exit_code = WEXITSTATUS(code);
+		}
+	#endif
+	
+	return exit_code;
+	
+}
+
 char* get_configuration_directory(void) {
 	
 	#ifdef _WIN32
@@ -51,28 +92,6 @@ char* get_configuration_directory(void) {
 	return configuration_directory;
 	
 }
-		
-#ifdef _WIN32
-	#ifdef UNICODE
-		#undef UNICODE
-	#endif
-	
-	#ifdef _UNICODE
-		#undef _UNICODE
-	#endif
-	
-	#include <windows.h>
-	#include <fileapi.h>
-#else
-	#include <unistd.h>
-	#include <sys/stat.h>
-	#include <errno.h>
-	#include <glob.h>
-#endif
-
-static const char INVALID_FILENAME_CHARS[] = {
-	' ', '/', '\\', ':', '*', '?', '\"', '<', '>', '|', '^', '\x00'
-};
 
 void normalize_filename(char* filename) {
 	
@@ -168,10 +187,26 @@ int directory_exists(const char* const directory) {
 	
 }
 
+int file_exists(const char* const filename) {
+	
+	/*
+	Returns 1 (true) if file exists and is a regular file or symlink, 0 (false) otherwise.
+	Directories, device files, named pipes and sockets return false.
+	*/
+	
+	#ifdef _WIN32
+		return (GetFileAttributesA(filename) & FILE_ATTRIBUTE_DIRECTORY) == 0;
+	#else
+		struct stat st = {0};
+		return (stat(filename, &st) == 0 && S_ISREG(st.st_mode));
+	#endif
+	
+}
+
 int is_absolute(const char* const path) {
 	
 	#ifdef _WIN32
-		return ((*path == PATH_SEPARATOR || (strlen(path) > 1 && isalpha(*path) && path[1] == *COLON));
+		return (*path == *PATH_SEPARATOR || (strlen(path) > 1 && isalpha(*path) && path[1] == *COLON));
 	#else
 		return (*path == *PATH_SEPARATOR);
 	#endif
