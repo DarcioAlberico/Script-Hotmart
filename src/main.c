@@ -975,7 +975,7 @@ int b() {
 	for (size_t index = 0; index < resources.offset; index++) {
 		const struct Resource* resource = &resources.items[index];
 		
-		printf("%i. \r\nNome: %s\r\nHomepage: https://%s%s\r\n\r\n", index + 1, resource->name, resource->subdomain, HOTMART_CLUB_SUFFIX);
+		printf("%zu. \r\nNome: %s\r\nHomepage: https://%s%s\r\n\r\n", index + 1, resource->name, resource->subdomain, HOTMART_CLUB_SUFFIX);
 	}
 	
 	char answer[4 + 1];
