@@ -367,6 +367,7 @@ if (ANDROID)
 	target_include_directories(
 		sparklec
 		AFTER
+		PRIVATE
 		src/android
 	)
 	
