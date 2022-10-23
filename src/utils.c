@@ -6,14 +6,6 @@
 #include "symbols.h"
 
 #ifdef _WIN32
-	#ifdef UNICODE
-		#undef UNICODE
-	#endif
-	
-	#ifdef _UNICODE
-		#undef _UNICODE
-	#endif
-	
 	#include <windows.h>
 	#include <fileapi.h>
 #else
@@ -148,20 +140,55 @@ int isnumeric(const char* const s) {
 int expand_filename(const char* filename, char** fullpath) {
 	
 	#ifdef _WIN32
-		char path[MAX_PATH];
-		const DWORD code = GetFullPathNameA(filename, sizeof(path), path, NULL);
-		
-		if (code == 0) {
-			return code;
-		}
-		
-		*fullpath = malloc(code + 1);
-		
-		if (*fullpath == NULL) {
-			return 0;
-		}
-		
-		strcpy(*fullpath, path);
+		#ifdef UNICODE
+			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
+			wchar_t wfilename[wcsize];
+			MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, wcsize);
+			
+			wchar_t path[MAX_PATH];
+			const DWORD code = GetFullPathNameW(wfilename, sizeof(path) / sizeof(*path), path, NULL);
+			
+			if (code == 0) {
+				return code;
+			}
+			
+			wchar_t fpath[code];
+			
+			if (code > sizeof(path) / sizeof(*path)) {
+				const DWORD code = GetFullPathNameW(wfilename, sizeof(fpath) / sizeof(*fpath), fpath, NULL);
+				
+				if (code == 0) {
+					return code;
+				}
+			} else {
+				wcscpy(fpath, path);
+			}
+			
+			const int size = WideCharToMultiByte(CP_UTF8, 0, fpath, wcslen(fpath), NULL, 0, NULL, NULL);
+			
+			*fullpath = malloc(size);
+			
+			if (*fullpath == NULL) {
+				return 0;
+			}
+			
+			WideCharToMultiByte(CP_UTF8, 0, fpath, -1, *fullpath, size, NULL, NULL);
+		#else
+			char path[MAX_PATH];
+			const DWORD code = GetFullPathNameA(filename, sizeof(path), path, NULL);
+			
+			if (code == 0) {
+				return code;
+			}
+			
+			*fullpath = malloc(code + 1);
+			
+			if (*fullpath == NULL) {
+				return 0;
+			}
+			
+			strcpy(*fullpath, path);
+		#endif
 	#else
 		*fullpath = realpath(filename, NULL);
 		
@@ -174,11 +201,19 @@ int expand_filename(const char* filename, char** fullpath) {
 	
 }
 
-
 int directory_exists(const char* const directory) {
 	
 	#ifdef _WIN32
-		const DWORD value = GetFileAttributesA(directory);
+		#ifdef UNICODE
+			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, directory, -1, NULL, 0);
+			wchar_t wdirectory[wcsize];
+			MultiByteToWideChar(CP_UTF8, 0, directory, -1, wdirectory, wcsize);
+			
+			const DWORD value = GetFileAttributesW(wdirectory);
+		#else
+			const DWORD value = GetFileAttributesA(directory);
+		#endif
+		
 		return (value != -1 && ((value & FILE_ATTRIBUTE_DIRECTORY) > 0));
 	#else
 		struct stat st = {0};
@@ -195,7 +230,17 @@ int file_exists(const char* const filename) {
 	*/
 	
 	#ifdef _WIN32
-		return (GetFileAttributesA(filename) & FILE_ATTRIBUTE_DIRECTORY) == 0;
+		#ifdef UNICODE
+			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
+			wchar_t wfilename[wcsize];
+			MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, wcsize);
+			
+			const DWORD value = GetFileAttributesW(wfilename);
+		#else
+			const DWORD value = GetFileAttributesA(filename);
+		#endif
+		
+		return (value != -1 && ((value & FILE_ATTRIBUTE_DIRECTORY) == 0));
 	#else
 		struct stat st = {0};
 		return (stat(filename, &st) == 0 && S_ISREG(st.st_mode));
@@ -216,7 +261,17 @@ int is_absolute(const char* const path) {
 static int raw_create_dir(const char* const directory) {
 	
 	#ifdef _WIN32
-		return (CreateDirectoryA(directory, NULL) == 1 || GetLastError() == ERROR_ALREADY_EXISTS);
+		#ifdef UNICODE
+			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, directory, -1, NULL, 0);
+			wchar_t wdirectory[wcsize];
+			MultiByteToWideChar(CP_UTF8, 0, directory, -1, wdirectory, wcsize);
+			
+			const BOOL code = CreateDirectoryW(wdirectory, NULL);
+		#else
+			const BOOL code = CreateDirectoryA(directory, NULL);
+		#endif
+			
+		return (code == 1 || GetLastError() == ERROR_ALREADY_EXISTS);
 	#else
 		return (mkdir(directory, 0777) == 0 || errno == EEXIST);
 	#endif

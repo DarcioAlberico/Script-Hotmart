@@ -388,7 +388,7 @@ set_target_properties(
 	IMPORTED_LOCATION $<TARGET_FILE:bearssl>
 )
 
-if (WINDOWS)
+if (WIN32)
 	foreach(target jansson libcurl)
 		set_target_properties(
 			${target}

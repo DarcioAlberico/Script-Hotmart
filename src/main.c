@@ -13,6 +13,11 @@
 #include "symbols.h"
 #include "cacert.h"
 
+#ifdef WIN32
+	#define printf(fmt, args...) wprintf(L##fmt, ##args)
+	#define fprintf(file, fmt, args...) fwprintf(file, L##fmt, ##args)
+#endif
+
 static const char JSON_FILE_EXTENSION[] = "json";
 static const char MP4_FILE_EXTENSION[] = "mp4";
 
