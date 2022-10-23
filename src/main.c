@@ -1170,3 +1170,7 @@ int b() {
 int main() {
 	printf("%i\n", b());
 }
+
+#if defined(WIN32) && defined(UNICODE)
+	#define wmain main
+#endif

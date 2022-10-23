@@ -388,7 +388,26 @@ set_target_properties(
 	IMPORTED_LOCATION $<TARGET_FILE:bearssl>
 )
 
+set_target_properties(
+	jansson
+	PROPERTIES
+	NO_SONAME 1
+)
+
 if (WIN32)
+	target_compile_definitions(
+		sparklec
+		PRIVATE
+		UNICODE _UNICODE
+	)
+	
+	target_link_options(
+		sparklec
+		AFTER
+		PRIVATE
+		-municode
+	)
+	
 	foreach(target jansson libcurl)
 		set_target_properties(
 			${target}
