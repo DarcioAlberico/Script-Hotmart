@@ -1,4 +1,4 @@
-#include <stdlib.h>
+#include <stdio.h>
 
 enum Type {
 	EXTM3U,
