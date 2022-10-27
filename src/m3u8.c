@@ -208,13 +208,8 @@ int m3u8_parse(struct Tags* tags, const char* const s) {
 											return UERR_MEMORY_ALLOCATE_FAILURE;
 										}
 										
-										for (size_t index = 0; index < key_size; index++) {
-											const char ch = attribute_start[index];
-											attr.key[index] = isupper(ch) ? ch + 32 : ch;
-										}
-										
+										memcpy(attr.key, attribute_start, key_size);
 										attr.key[key_size] = '\0';
-										puts(attr.key);
 									}
 									
 									if (separator != attribute_end) {
@@ -351,7 +346,7 @@ int tags_dumpf(const struct Tags* const tags, FILE* const stream) {
 	for (size_t index = 0; index < tags->offset; index++) {
 		struct Tag* tag = &tags->items[index];
 		
-		if (fwrite(SLASH, sizeof(*SLASH), strlen(SLASH), stream) != strlen(SLASH)) {
+		if (fwrite(HASHTAG, sizeof(*HASHTAG), strlen(HASHTAG), stream) != strlen(HASHTAG)) {
 			return 0;
 		}
 		
@@ -397,7 +392,7 @@ int tags_dumpf(const struct Tags* const tags, FILE* const stream) {
 			}
 		}
 		
-		if (tag->uri == NULL) {
+		if (tag->uri != NULL) {
 			if (fwrite(LF, sizeof(*LF), strlen(LF), stream) != strlen(LF)) {
 				return 0;
 			}

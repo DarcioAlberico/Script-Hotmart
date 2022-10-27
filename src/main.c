@@ -1216,7 +1216,7 @@ int b() {
 							struct Tag* tag = &tags.items[index];
 							
 							if (tag->type == EXT_X_KEY) {
-								struct Attribute* attribute = attributes_get(&tag->attributes, "uri");
+								struct Attribute* attribute = attributes_get(&tag->attributes, "URI");
 								
 								curl_url_set(cu, CURLUPART_URL, attribute->value, 0);
 								
@@ -1231,6 +1231,7 @@ int b() {
 								strcat(filename, KEY_FILE_EXTENSION);
 								
 								attribute_set_value(attribute, filename);
+								tag_set_uri(tag, filename);
 								
 								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
 								
