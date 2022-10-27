@@ -118,6 +118,20 @@ char to_hex(const char ch) {
 	return ch + (ch > 9 ? ('a' - 10) : '0');
 }
 
+size_t intlen(const int value) {
+	
+	int val = value;
+	size_t size = 0;
+	
+	do {
+		val /= 10;
+		size++;
+	} while (val > 0);
+	
+	return size;
+	
+}
+
 int isnumeric(const char* const s) {
 	/*
 	Return true (1) if the string is a numeric string, false (0) otherwise.

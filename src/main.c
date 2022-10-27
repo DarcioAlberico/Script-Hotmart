@@ -12,6 +12,13 @@
 #include "sha256.h"
 #include "symbols.h"
 #include "cacert.h"
+#include "m3u8.h"
+
+struct SegmentDownload {
+	CURL* handle;
+	char* filename;
+	FILE* stream;
+};
 
 #ifdef WIN32
 	#define printf(fmt, args...) wprintf(L##fmt, ##args)
@@ -20,6 +27,10 @@
 
 static const char JSON_FILE_EXTENSION[] = "json";
 static const char MP4_FILE_EXTENSION[] = "mp4";
+static const char TS_FILE_EXTENSION[] = "ts";
+static const char KEY_FILE_EXTENSION[] = "key";
+
+static const char LOCAL_PLAYLIST_FILENAME[] = "playlist.m3u8";
 
 static const char HTTPS_SCHEME[] = "https://";
 
@@ -849,7 +860,7 @@ int b() {
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
-	//curl_easy_setopt(curl, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
+	curl_easy_setopt(curl, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(curl, CURLOPT_TCP_FASTOPEN, 1L);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, HTTP_DEFAULT_USER_AGENT);
 	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
@@ -1097,6 +1108,278 @@ int b() {
 						fprintf(stderr, "- O arquivo '%s' não existe, ele será baixado\r\n", media_filename);
 						printf("+ Baixando de '%s' para '%s'\r\n", media->url, media_filename);
 						
+						struct String string = {0};
+						
+						curl_easy_setopt(curl, CURLOPT_URL, media->url);
+						curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
+						
+						if (curl_easy_perform(curl) != CURLE_OK) {
+							return UERR_CURL_FAILURE;
+						}
+						
+						struct Tags tags = {0};
+						
+						if (m3u8_parse(&tags, string.s) != UERR_SUCCESS) {
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							exit(EXIT_FAILURE);
+						}
+						
+						string_free(&string);
+						
+						int last_width = 0;
+						const char* playlist_uri = NULL;
+						
+						for (size_t index = 0; index < tags.offset; index++) {
+							struct Tag* tag = &tags.items[index];
+							
+							if (tag->type != EXT_X_STREAM_INF) {
+								continue;
+							}
+							
+							const struct Attribute* const attribute = attributes_get(&tag->attributes, "resolution");
+							
+							const char* const start = attribute->value;
+							const char* const end = strstr(start, "x");
+							
+							const size_t size = (size_t) (end - start);
+							
+							char value[size + 1];
+							memcpy(value, start, size);
+							value[size] = '\0';
+							
+							const int width = atoi(value);
+							
+							if (last_width < width) {
+								last_width = width;
+								playlist_uri = tag->uri;
+							}
+							/*
+							printf("Tag name: %s\n", tag_stringify(tag->type));
+							
+							if (tag->attributes.offset > 0) {
+								for (size_t index = 0; index < tag->attributes.offset; index++) {
+									struct Attribute* attribute = &tag->attributes.items[index];
+									
+									printf("%s=%s, ", attribute->key, attribute->value);
+								}
+								
+								printf("\r\n");
+							}
+							
+							if (tag->uri != NULL) {
+								printf("Tag URI: %s\n", tag->uri);
+							}
+							*/
+						}
+						
+						CURLU *cu = curl_url();
+						curl_url_set(cu, CURLUPART_URL, media->url, 0);
+						curl_url_set(cu, CURLUPART_URL, playlist_uri, 0);
+						
+						m3u8_free(&tags);
+						
+						char* playlist_full_url = NULL;
+						curl_url_get(cu, CURLUPART_URL, &playlist_full_url, 0);
+						
+						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
+						
+						//curl_free(url);
+						
+						if (curl_easy_perform(curl) != CURLE_OK) {
+							return UERR_CURL_FAILURE;
+						}
+						
+						if (m3u8_parse(&tags, string.s) != UERR_SUCCESS) {
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							exit(EXIT_FAILURE);
+						}
+						
+						int segment_number = 0;
+						
+						struct SegmentDownload downloads[tags.offset];
+						size_t downloads_offset = 0;
+						
+						CURLM* multi_handle = curl_multi_init();
+						
+						curl_multi_setopt(multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, (long) 30);
+						curl_multi_setopt(multi_handle, CURLMOPT_MAX_TOTAL_CONNECTIONS, (long) 30);
+						
+						curl_multi_setopt(multi_handle, CURLMOPT_PIPELINING, CURLMOPT_PIPELINING);
+						curl_multi_setopt(multi_handle, CURLOPT_PIPEWAIT, 1L);
+						
+						char playlist_filename[strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(LOCAL_PLAYLIST_FILENAME) + 1];
+						strcpy(playlist_filename, page_directory);
+						strcat(playlist_filename, PATH_SEPARATOR);
+						strcat(playlist_filename, LOCAL_PLAYLIST_FILENAME);
+						
+						for (size_t index = 0; index < tags.offset; index++) {
+							struct Tag* tag = &tags.items[index];
+							
+							if (tag->type == EXT_X_KEY) {
+								struct Attribute* attribute = attributes_get(&tag->attributes, "uri");
+								
+								curl_url_set(cu, CURLUPART_URL, attribute->value, 0);
+								FILE* a = fopen("/sdcard/a.txt", "wb");
+								fprintf(a, "%s", attributes_get(&tag->attributes, "iv")->value);
+								fclose(a);
+								char* url = NULL;
+								curl_url_get(cu, CURLUPART_URL, &url, 0);
+								
+								char* filename = malloc(strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(KEY_FILE_EXTENSION) + strlen(DOT) + strlen(KEY_FILE_EXTENSION) + 1);
+								strcpy(filename, page_directory);
+								strcat(filename, PATH_SEPARATOR);
+								strcat(filename, KEY_FILE_EXTENSION);
+								strcat(filename, DOT);
+								strcat(filename, KEY_FILE_EXTENSION);
+								
+								attribute_set_value(attribute, filename);
+								
+								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
+								
+								CURL* handle = curl_easy_init();
+															
+								curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1L);
+								curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
+								curl_easy_setopt(handle, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
+								curl_easy_setopt(handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+								curl_easy_setopt(handle, CURLOPT_USERAGENT, HTTP_DEFAULT_USER_AGENT);
+								curl_easy_setopt(handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+								curl_easy_setopt(handle, CURLOPT_CAPATH, NULL);
+								curl_easy_setopt(handle, CURLOPT_CAINFO, NULL);
+								curl_easy_setopt(handle, CURLOPT_CAINFO_BLOB, &blob);
+								curl_easy_setopt(handle, CURLOPT_RESOLVE, resolve_list);
+								curl_easy_setopt(handle, CURLOPT_URL, url);
+								
+								curl_free(url);
+								
+								FILE* stream = fopen(filename, "wb");
+								//curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, curl_write_file_cb);
+								curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void*) stream);
+								
+								curl_multi_add_handle(multi_handle, handle);
+								
+								struct SegmentDownload download = {
+									.handle = handle,
+									.filename = filename,
+									.stream = stream
+								};
+								
+								downloads[downloads_offset++] = download;
+								
+								curl_url_set(cu, CURLUPART_URL, playlist_full_url, 0);
+							} else if (tag->type == EXTINF && tag->uri != NULL) {
+								curl_url_set(cu, CURLUPART_URL, tag->uri, 0);
+								
+								char* url = NULL;
+								curl_url_get(cu, CURLUPART_URL, &url, 0);
+								
+								char value[intlen(segment_number) + 1];
+								snprintf(value, sizeof(value), "%i", segment_number);
+								
+								char* filename = malloc(strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(value) + strlen(DOT) + strlen(TS_FILE_EXTENSION) + 1);
+								strcpy(filename, page_directory);
+								strcat(filename, PATH_SEPARATOR);
+								strcat(filename, value);
+								strcat(filename, DOT);
+								strcat(filename, TS_FILE_EXTENSION);
+								
+								tag_set_uri(tag, filename);
+								
+								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
+								
+								CURL* handle = curl_easy_init();
+															
+								curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1L);
+								curl_easy_setopt(handle, CURLOPT_SSL_VERIFYPEER, 0L);
+								curl_easy_setopt(handle, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
+								curl_easy_setopt(handle, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
+								curl_easy_setopt(handle, CURLOPT_USERAGENT, HTTP_DEFAULT_USER_AGENT);
+								curl_easy_setopt(handle, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
+								curl_easy_setopt(handle, CURLOPT_CAPATH, NULL);
+								curl_easy_setopt(handle, CURLOPT_CAINFO, NULL);
+								curl_easy_setopt(handle, CURLOPT_CAINFO_BLOB, &blob);
+								curl_easy_setopt(handle, CURLOPT_RESOLVE, resolve_list);
+								curl_easy_setopt(handle, CURLOPT_URL, url);
+								
+								curl_free(url);
+								
+								FILE* stream = fopen(filename, "wb");
+								//curl_easy_setopt(handle, CURLOPT_WRITEFUNCTION, curl_write_file_cb);
+								curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void*) stream);
+								
+								curl_multi_add_handle(multi_handle, handle);
+								
+								struct SegmentDownload download = {
+									.handle = handle,
+									.filename = filename,
+									.stream = stream
+								};
+								
+								downloads[downloads_offset++] = download;
+								
+								segment_number++;
+							}
+							
+						}
+						
+						printf("+ Exportando lista de reprodução para '%s'\r\n", playlist_filename);
+						 
+						FILE* const stream = fopen(playlist_filename, "wb");
+						tags_dumpf(&tags, stream);
+						fclose(stream);
+						
+						curl_url_cleanup(cu);
+						
+						int still_running = 1;
+						puts("9999");
+						while (still_running) {
+							CURLMcode mc = curl_multi_perform(multi_handle, &still_running);
+							//printf("still_running -> %i\n", still_running);
+							if (still_running) {
+								mc = curl_multi_poll(multi_handle, NULL, 0, 1000, NULL);
+							}
+							
+							if (mc) {
+								break;
+							}
+						}
+						CURLMsg* msg;
+						int msgs_left;
+						while((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
+							if(msg->msg == CURLMSG_DONE) {
+								
+								/* Find out which handle this message is about */
+								for (size_t index = 0; index < downloads_offset; index++) {
+									struct SegmentDownload download = downloads[index];
+									CURL* handle = download.handle;
+									
+									int found = (msg->easy_handle == handle);
+									if(found)
+										break;
+								}
+					
+								printf("HTTP transfer completed with status %d\n", msg->data.result);
+							}
+						}
+
+						for (size_t index = 0; index < downloads_offset; index++) {
+							struct SegmentDownload* download = &downloads[index];
+							
+							fclose(download->stream);
+							
+							curl_multi_remove_handle(multi_handle, download->handle);
+							curl_easy_cleanup(download->handle);
+							
+							 free(download->filename);
+						}
+						
+						curl_multi_cleanup(multi_handle);
+						
+						puts("9999");
+						sleep(10);
+						
+						printf("last_width -> %i\n", last_width);
+						printf("playlist_uri -> %s\n", playlist_uri);
 						char output_file[strlen(QUOTATION_MARK) * 2 + strlen(media_filename) + 1];
 						strcpy(output_file, QUOTATION_MARK);
 						strcat(output_file, media_filename);
