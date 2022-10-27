@@ -112,7 +112,6 @@ int m3u8_parse(struct Tags* tags, const char* const s) {
 		}
 		
 		const size_t line_size = (size_t) (line_end - line_start);
-		printf("line_size -> %zu\n", line_size);
 		
 		if (line_size > 0) {
 			const char* start = line_start;
@@ -144,8 +143,6 @@ int m3u8_parse(struct Tags* tags, const char* const s) {
 				char line[line_size + 1];
 				memcpy(line, start, line_size);
 				line[line_size] = '\0';
-				
-				puts(line);
 				
 				struct Tag tag = {0};
 				
@@ -226,6 +223,7 @@ int m3u8_parse(struct Tags* tags, const char* const s) {
 										}
 										
 										attribute_end = value_end;
+										attr.is_quoted = 1;
 									}
 									
 									const size_t value_size = (size_t) (separator == attribute_end ? 0 : attribute_end - separator);
@@ -378,8 +376,20 @@ int tags_dumpf(const struct Tags* const tags, FILE* const stream) {
 					return 0;
 				}
 				
+				if (attribute->is_quoted) {
+					if (fwrite(QUOTATION_MARK, sizeof(*QUOTATION_MARK), strlen(QUOTATION_MARK), stream) != strlen(QUOTATION_MARK)) {
+						return 0;
+					}
+				}
+				
 				if (fwrite(attribute->value, sizeof(*attribute->value), strlen(attribute->value), stream) != strlen(attribute->value)) {
 					return 0;
+				}
+				
+				if (attribute->is_quoted) {
+					if (fwrite(QUOTATION_MARK, sizeof(*QUOTATION_MARK), strlen(QUOTATION_MARK), stream) != strlen(QUOTATION_MARK)) {
+						return 0;
+					}
 				}
 			}
 		} else {

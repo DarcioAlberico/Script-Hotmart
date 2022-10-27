@@ -16,7 +16,7 @@
 #endif
 
 static const char INVALID_FILENAME_CHARS[] = {
-	' ', '/', '\\', ':', '*', '?', '\"', '<', '>', '|', '^', '\x00'
+	'"', ' ', '/', '\\', ':', '*', '?', '\"', '<', '>', '|', '^', '\x00'
 };
 
 int execute_shell_command(const char* const command) {
@@ -212,6 +212,28 @@ int expand_filename(const char* filename, char** fullpath) {
 	#endif
 	
 	return 1;
+	
+}
+
+
+int remove_file(const char* const filename) {
+	/*
+	Removes the file. On Windows, ignores the read-only attribute.
+	*/
+	
+	#ifdef _WIN32
+		#ifdef UNICODE
+			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
+			wchar_t wfilename[wcsize];
+			MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, wcsize);
+			
+			return DeleteFileW(wfilename) == 1;
+		#else
+			return DeleteFileA(filename) == 1;
+		#endif
+	#else
+		return unlink(filename) == 0;
+	#endif
 	
 }
 

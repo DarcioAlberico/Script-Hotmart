@@ -1,6 +1,7 @@
 int directory_exists(const char* const directory);
 int file_exists(const char* const filename);
 int create_directory(const char* const directory);
+int remove_file(const char* const filename);
 char to_hex(const char ch);
 char from_hex(const char ch);
 size_t intlen(const int value);

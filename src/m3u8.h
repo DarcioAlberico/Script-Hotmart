@@ -28,6 +28,7 @@ enum Type {
 struct Attribute {
 	char* key;
 	char* value;
+	int is_quoted;
 };
 
 struct Attributes {
