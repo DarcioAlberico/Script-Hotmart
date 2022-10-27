@@ -1219,9 +1219,7 @@ int b() {
 								struct Attribute* attribute = attributes_get(&tag->attributes, "uri");
 								
 								curl_url_set(cu, CURLUPART_URL, attribute->value, 0);
-								FILE* a = fopen("/sdcard/a.txt", "wb");
-								fprintf(a, "%s", attributes_get(&tag->attributes, "iv")->value);
-								fclose(a);
+								
 								char* url = NULL;
 								curl_url_get(cu, CURLUPART_URL, &url, 0);
 								
