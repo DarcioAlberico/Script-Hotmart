@@ -1184,7 +1184,7 @@ int b() {
 				
 				for (size_t index = 0; index < page->medias.offset; index++) {
 					struct Media* media = &page->medias.items[index];
-					break;
+					
 					char filename[strlen(page->name) + 1];
 					strcpy(filename, page->name);
 					normalize_filename(filename);
