@@ -1447,8 +1447,13 @@ int b() {
 									if(found)
 										break;
 								}
-					
-								printf("HTTP transfer completed with status %d\n", msg->data.result);
+								
+								const CURLcode code = msg->data.result;
+								
+								if (code != CURLE_OK) {
+									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+									exit(EXIT_FAILURE);
+								}
 							}
 						}
 						
