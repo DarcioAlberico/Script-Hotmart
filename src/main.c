@@ -1,5 +1,3 @@
-#define NOMINMAX
-
 #include <stdlib.h>
 #include <locale.h>
 
@@ -474,6 +472,7 @@ static int get_modules(
 	
 	struct String string = {0};
 	
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
 	curl_easy_setopt(curl, CURLOPT_URL, HOTMART_NAVIGATION_ENDPOINT);
@@ -665,6 +664,7 @@ static int get_page(
 	
 	struct String string = {0};
 	
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
 	
@@ -790,7 +790,34 @@ static int get_page(
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
-			const json_t* obj = json_object_get(item, "fileMembershipId");
+			const json_t* obj = json_object_get(item, "fileName");
+			
+			if (obj == NULL) {
+				json_decref(tree);
+				return UERR_JSON_MISSING_REQUIRED_KEY;
+			}
+			
+			if (!json_is_string(obj)) {
+				json_decref(tree);
+				return UERR_JSON_NON_MATCHING_TYPE;
+			}
+			
+			const char* const filename = json_string_value(obj);
+			const char* start = filename;
+			
+			while (1) {
+				const char* const tmp = strstr(start + 1, DOT);
+				
+				if (tmp == NULL) {
+					break;
+				}
+				
+				start = tmp;
+			}
+			
+			start++;
+			
+			obj = json_object_get(item, "fileMembershipId");
 			
 			if (obj == NULL) {
 				json_decref(tree);
@@ -840,10 +867,12 @@ static int get_page(
 			const char* const download_url = json_string_value(obj);
 			
 			struct Attachment attachment = {
-				.url = malloc(strlen(download_url) + 1)
+				.url = malloc(strlen(download_url) + 1),
+				.extension = malloc(strlen(start) + 1)
 			};
 			
 			strcpy(attachment.url, download_url);
+			strcpy(attachment.extension, start);
 			
 			page->attachments.items[page->attachments.offset++] = attachment;
 			
@@ -1155,7 +1184,7 @@ int b() {
 				
 				for (size_t index = 0; index < page->medias.offset; index++) {
 					struct Media* media = &page->medias.items[index];
-					
+					break;
 					char filename[strlen(page->name) + 1];
 					strcpy(filename, page->name);
 					normalize_filename(filename);
@@ -1516,8 +1545,53 @@ int b() {
 				for (size_t index = 0; index < page->attachments.offset; index++) {
 					struct Attachment* attachment = &page->attachments.items[index];
 					
-					if (attachment->url != NULL) {
-						printf("Attachment URL: %s\n", attachment->url);
+					char filename[strlen(page->name) + 1];
+					strcpy(filename, page->name);
+					normalize_filename(filename);
+					
+					int attachment_number = index + 1;
+					
+					char attachment_filename[strlen(page_directory) + strlen(PATH_SEPARATOR) + ((page->attachments.offset > 1) ? (intlen(attachment_number) + strlen(DOT) + strlen(SPACE)) : 0) + strlen(filename) + strlen(DOT) + strlen(attachment->extension) + 1];
+					strcpy(attachment_filename, page_directory);
+					strcat(attachment_filename, PATH_SEPARATOR);
+					
+					if (page->attachments.offset > 1) {
+						char value[intlen(attachment_number) + 1];
+						snprintf(value, sizeof(value), "%i", attachment_number);
+						
+						strcat(attachment_filename, value);
+						strcat(attachment_filename, DOT);
+						strcat(attachment_filename, SPACE);
+					}
+					
+					strcat(attachment_filename, filename);
+					strcat(attachment_filename, DOT);
+					strcat(attachment_filename, attachment->extension);
+					
+					if (!file_exists(attachment_filename)) {
+						fprintf(stderr, "- O arquivo '%s' não existe, ele será baixado\r\n", attachment_filename);
+						printf("+ Baixando de '%s' para '%s'\r\n", attachment->url, attachment_filename);
+						
+						FILE* stream = fopen(attachment_filename, "wb");
+						
+						if (stream == NULL) {
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							exit(EXIT_FAILURE);
+						}
+						
+						curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
+						curl_easy_setopt(curl, CURLOPT_URL, attachment->url);
+						curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+						curl_easy_setopt(curl, CURLOPT_WRITEDATA, (void*) stream);
+						
+						const CURLcode code = curl_easy_perform(curl);
+						
+						fclose(stream);
+						
+						if (code != CURLE_OK) {
+							remove_file(attachment_filename);
+							return UERR_CURL_FAILURE;
+						}
 					}
 				}
 			}

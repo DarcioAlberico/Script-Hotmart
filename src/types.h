@@ -18,6 +18,7 @@ struct Medias {
 
 struct Attachment {
 	char* url;
+	char* extension;
 };
 
 struct Attachments {
