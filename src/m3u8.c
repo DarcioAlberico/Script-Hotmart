@@ -382,8 +382,25 @@ int tags_dumpf(const struct Tags* const tags, FILE* const stream) {
 					}
 				}
 				
-				if (fwrite(attribute->value, sizeof(*attribute->value), strlen(attribute->value), stream) != strlen(attribute->value)) {
-					return 0;
+				if (strcmp(attribute->key, "URI") == 0) {
+					char value[strlen(attribute->value) + 1];
+					strcpy(value, attribute->value);
+					
+					for (size_t index = 0; index < strlen(value); index++) {
+						char* ch = &value[index];
+						
+						if (*ch == *BACKSLASH) {
+							*ch = *SLASH;
+						}
+					}
+					
+					if (fwrite(value, sizeof(*value), strlen(value), stream) != strlen(value)) {
+						return 0;
+					}
+				} else {
+					if (fwrite(attribute->value, sizeof(*attribute->value), strlen(attribute->value), stream) != strlen(attribute->value)) {
+						return 0;
+					}
 				}
 				
 				if (attribute->is_quoted) {
