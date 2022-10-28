@@ -407,7 +407,18 @@ int tags_dumpf(const struct Tags* const tags, FILE* const stream) {
 				return 0;
 			}
 			
-			if (fwrite(tag->uri, sizeof(*tag->uri), strlen(tag->uri), stream) != strlen(tag->uri)) {
+			char uri[strlen(tag->uri) + 1];
+			strcpy(uri, tag->uri);
+			
+			for (size_t index = 0; index < strlen(uri); index++) {/
+				char* ch = &uri[index];
+				
+				if (*ch == *BACKSLASH) {
+					*ch = *SLASH;
+				}
+			}
+			
+			if (fwrite(uri, sizeof(*uri), strlen(uri), stream) != strlen(uri)) {
 				return 0;
 			}
 		}

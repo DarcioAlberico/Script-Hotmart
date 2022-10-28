@@ -1,5 +1,6 @@
 static const char DOT[] = ".";
 static const char SLASH[] = "/";
+static const char BACKSLASH[] = "\\";
 static const char SPACE[] = " ";
 static const char COLON[] = ":";
 static const char QUOTATION_MARK[] = "\"";

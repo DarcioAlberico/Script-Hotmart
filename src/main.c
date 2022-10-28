@@ -1449,7 +1449,7 @@ int b() {
 						}
 						
 						const int exit_code = execute_shell_command(command_line);
-						
+						/*
 						for (size_t index = 0; index < downloads_offset; index++) {
 							struct SegmentDownload* download = &downloads[index];
 							
@@ -1458,7 +1458,7 @@ int b() {
 						}
 						
 						remove_file(playlist_filename);
-						
+						*/
 						if (exit_code != 0) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
 							exit(EXIT_FAILURE);
