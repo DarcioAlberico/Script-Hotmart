@@ -62,7 +62,7 @@ struct SegmentDownload {
 		wchar_t wvalue[wcsize];
 		MultiByteToWideChar(CP_UTF8, 0, value, -1, wvalue, wcsize);
 		
-		return wfprintf(stream, wvalue);
+		return fwprintf(stream, wvalue);
 		
 	}
 	
