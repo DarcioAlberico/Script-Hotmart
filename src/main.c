@@ -3,6 +3,10 @@
 #include <stdlib.h>
 #include <locale.h>
 
+#if defined(WIN32) && defined(UNICODE)
+	#include <stdarg.h>
+#endif
+
 #include <curl/curl.h>
 #include <jansson.h>
 #include <bearssl.h>
@@ -23,13 +27,47 @@ struct SegmentDownload {
 	FILE* stream;
 };
 
-#ifdef WIN32
-	#define printf(fmt, args...) wprintf(L##fmt, ##args)
-	#define fprintf(file, fmt, args...) fwprintf(file, L##fmt, ##args)
-#endif
-
 #if defined(WIN32) && defined(UNICODE)
-	FILE* fopen(const char* const filename, const char* const mode) {
+	int __printf(const char* const format, ...) {
+		
+		va_list list;
+		va_start(list, format);
+		
+		const int size = _vscprintf(format, list);
+		char value[size + 1];
+		vsnprintf(value, sizeof(value), format, list);
+		
+		va_end(list);
+		
+		int wcsize = MultiByteToWideChar(CP_UTF8, 0, value, -1, NULL, 0);
+		wchar_t wvalue[wcsize];
+		MultiByteToWideChar(CP_UTF8, 0, value, -1, wvalue, wcsize);
+		
+		return wprintf(wvalue);
+		
+	}
+	
+	int __fprintf(FILE* const stream, const char* const format, ...) {
+		
+		va_list list;
+		va_start(list, format);
+		
+		const int size = _vscprintf(format, list);
+		char value[size + 1];
+		vsnprintf(value, sizeof(value), format, list);
+		
+		va_end(list);
+		
+		int wcsize = MultiByteToWideChar(CP_UTF8, 0, value, -1, NULL, 0);
+		wchar_t wvalue[wcsize];
+		MultiByteToWideChar(CP_UTF8, 0, value, -1, wvalue, wcsize);
+		
+		return wfprintf(stream, wvalue);
+		
+	}
+	
+	FILE* __fopen(const char* const filename, const char* const mode) {
+		
 		int wcsize = 0;
 		
 		wcsize = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
@@ -41,7 +79,12 @@ struct SegmentDownload {
 		MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, wcsize);
 		
 		return _wfopen(wfilename, wmode);
+		
 	};
+	
+	#define printf __printf
+	#define fprintf __fprintf
+	#define fopen __fopen
 #endif
 
 static const char JSON_FILE_EXTENSION[] = "json";
