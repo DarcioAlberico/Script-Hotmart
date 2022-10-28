@@ -410,7 +410,7 @@ int tags_dumpf(const struct Tags* const tags, FILE* const stream) {
 			char uri[strlen(tag->uri) + 1];
 			strcpy(uri, tag->uri);
 			
-			for (size_t index = 0; index < strlen(uri); index++) {/
+			for (size_t index = 0; index < strlen(uri); index++) {
 				char* ch = &uri[index];
 				
 				if (*ch == *BACKSLASH) {
