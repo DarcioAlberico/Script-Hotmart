@@ -22,12 +22,12 @@ struct SegmentDownload {
 	char* filename;
 	FILE* stream;
 };
-/*
+
 #ifdef WIN32
 	#define printf(fmt, args...) wprintf(L##fmt, ##args)
 	#define fprintf(file, fmt, args...) fwprintf(file, L##fmt, ##args)
 #endif
-*/
+
 #if defined(WIN32) && defined(UNICODE)
 	FILE* fopen(const char* const filename, const char* const mode) {
 		int wcsize = 0;
