@@ -25,6 +25,22 @@ struct SegmentDownload {
 	#define fprintf(file, fmt, args...) fwprintf(file, L##fmt, ##args)
 #endif
 
+#if defined(WIN32) && defined(UNICODE)
+	FILE* fopen(const char* const filename, const char* const mode) {
+		int wcsize = 0;
+		
+		wcsize = MultiByteToWideChar(CP_UTF8, 0, filename, -1, NULL, 0);
+		wchar_t wfilename[wcsize];
+		MultiByteToWideChar(CP_UTF8, 0, filename, -1, wfilename, wcsize);
+		
+		wcsize = MultiByteToWideChar(CP_UTF8, 0, mode, -1, NULL, 0);
+		wchar_t wmode[wcsize];
+		MultiByteToWideChar(CP_UTF8, 0, mode, -1, wmode, wcsize);
+		
+		return _wfopen(wfilename, wmode);
+	};
+#endif
+
 static const char JSON_FILE_EXTENSION[] = "json";
 static const char MP4_FILE_EXTENSION[] = "mp4";
 static const char TS_FILE_EXTENSION[] = "ts";
@@ -1192,9 +1208,6 @@ int b() {
 						curl_multi_setopt(multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, (long) 30);
 						curl_multi_setopt(multi_handle, CURLMOPT_MAX_TOTAL_CONNECTIONS, (long) 30);
 						
-						curl_multi_setopt(multi_handle, CURLMOPT_PIPELINING, CURLMOPT_PIPELINING);
-						curl_multi_setopt(multi_handle, CURLOPT_PIPEWAIT, 1L);
-						
 						char playlist_filename[strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(LOCAL_PLAYLIST_FILENAME) + 1];
 						strcpy(playlist_filename, page_directory);
 						strcat(playlist_filename, PATH_SEPARATOR);
@@ -1468,10 +1481,10 @@ int b() {
 	return 0;
 }
 
+#if defined(WIN32) && defined(UNICODE)
+	#define main wmain
+#endif
+
 int main() {
 	printf("%i\n", b());
 }
-
-#if defined(WIN32) && defined(UNICODE)
-	#define wmain main
-#endif

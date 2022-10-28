@@ -404,7 +404,7 @@ if (WIN32)
 	
 	target_link_options(
 		sparklec
-		AFTER
+		BEFORE
 		PRIVATE
 		-municode
 	)

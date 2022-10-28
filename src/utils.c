@@ -21,7 +21,16 @@ static const char INVALID_FILENAME_CHARS[] = {
 
 int execute_shell_command(const char* const command) {
 	
-	const int code = system(command);
+	#if defned(_WIN32) && defned(UNICODE)
+		const int wcsize = MultiByteToWideChar(CP_UTF8, 0, command, -1, NULL, 0);
+		wchar_t wcommand[wcsize];
+		MultiByteToWideChar(CP_UTF8, 0, command, -1, wcommand, wcsize);
+		
+		const int code = _wsystem(wcommand);
+	#else
+		const int code = system(command);
+	#endif
+	
 	int exit_code = 0;
 	
 	#ifdef _WIN32
@@ -298,14 +307,12 @@ static int raw_create_dir(const char* const directory) {
 	
 	#ifdef _WIN32
 		#ifdef UNICODE
-			puts("aaaaa");
 			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, directory, -1, NULL, 0);
 			wchar_t wdirectory[wcsize];
 			MultiByteToWideChar(CP_UTF8, 0, directory, -1, wdirectory, wcsize);
-			wprintf(wdirectory);
+			
 			const BOOL code = CreateDirectoryW(wdirectory, NULL);
 		#else
-			puts("bbbbbbb");
 			const BOOL code = CreateDirectoryA(directory, NULL);
 		#endif
 			
