@@ -1,3 +1,5 @@
+#define NOMINMAX
+
 #include <stdlib.h>
 #include <locale.h>
 
@@ -820,6 +822,7 @@ int b() {
 	#endif
 	
 	if (!directory_exists(APP_CONFIG_DIRECTORY)) {
+		setlocale(LC_ALL, ".UTF8");
 		fprintf(stderr, "- Diretório de configurações não encontrado, criando-o\r\n");
 		
 		if (!create_directory(APP_CONFIG_DIRECTORY)) {
