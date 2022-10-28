@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <locale.h>
 
 #include <curl/curl.h>
 #include <jansson.h>
@@ -19,12 +20,12 @@ struct SegmentDownload {
 	char* filename;
 	FILE* stream;
 };
-
+/*
 #ifdef WIN32
 	#define printf(fmt, args...) wprintf(L##fmt, ##args)
 	#define fprintf(file, fmt, args...) fwprintf(file, L##fmt, ##args)
 #endif
-
+*/
 #if defined(WIN32) && defined(UNICODE)
 	FILE* fopen(const char* const filename, const char* const mode) {
 		int wcsize = 0;
@@ -1449,7 +1450,7 @@ int b() {
 						}
 						
 						const int exit_code = execute_shell_command(command_line);
-						/*
+						
 						for (size_t index = 0; index < downloads_offset; index++) {
 							struct SegmentDownload* download = &downloads[index];
 							
@@ -1458,7 +1459,7 @@ int b() {
 						}
 						
 						remove_file(playlist_filename);
-						*/
+						
 						if (exit_code != 0) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
 							exit(EXIT_FAILURE);
@@ -1486,5 +1487,6 @@ int b() {
 #endif
 
 int main() {
+	setlocale(LC_ALL, ".UTF8");
 	printf("%i\n", b());
 }
