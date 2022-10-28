@@ -21,7 +21,7 @@ static const char INVALID_FILENAME_CHARS[] = {
 
 int execute_shell_command(const char* const command) {
 	
-	#if defned(_WIN32) && defned(UNICODE)
+	#if defined(_WIN32) && defned(UNICODE)
 		const int wcsize = MultiByteToWideChar(CP_UTF8, 0, command, -1, NULL, 0);
 		wchar_t wcommand[wcsize];
 		MultiByteToWideChar(CP_UTF8, 0, command, -1, wcommand, wcsize);
