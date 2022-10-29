@@ -1243,10 +1243,10 @@ int b() {
 				}
 			}
 			
+			printf("+ Obtendo lista de páginas do módulo '%s'\r\n", module->name);
+			
 			for (size_t index = 0; index < module->pages.offset; index++) {
 				struct Page* page = &module->pages.items[index];
-				
-				printf("+ Obtendo lista de páginas do módulo '%s'\r\n", module->name);
 				
 				if (get_page(&credentials, resource, page) != UERR_SUCCESS) {
 					fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
