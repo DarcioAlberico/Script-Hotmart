@@ -925,8 +925,6 @@ static int get_page(
 				return UERR_CURL_FAILURE;
 			}
 			
-			curl_slist_free_all(list);
-			
 			json_t* subtree = json_loads(string.s, 0, NULL);
 			
 			string_free(&string);
@@ -972,6 +970,7 @@ static int get_page(
 	}
 	
 	json_decref(tree);
+	curl_slist_free_all(list);
 	
 	return UERR_SUCCESS;
 	
