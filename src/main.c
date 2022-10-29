@@ -41,7 +41,7 @@ struct SegmentDownload {
 		wchar_t wvalue[wcsize];
 		MultiByteToWideChar(CP_UTF8, 0, value, -1, wvalue, wcsize);
 		
-		return wprintf(wvalue);
+		return wprintf(L"%ls", wvalue);
 		
 	}
 	
@@ -60,7 +60,7 @@ struct SegmentDownload {
 		wchar_t wvalue[wcsize];
 		MultiByteToWideChar(CP_UTF8, 0, value, -1, wvalue, wcsize);
 		
-		return fwprintf(stream, wvalue);
+		return fwprintf(stream, L"%ls", wvalue);
 		
 	}
 	
@@ -241,9 +241,19 @@ static int authorize(
 	const int expires_in = json_integer_value(obj);
 	
 	credentials->access_token = malloc(strlen(access_token) + 1);
+	
+	if (credentials->access_token == NULL) {
+		return UERR_MEMORY_ALLOCATE_FAILURE;
+	} 
+	
 	strcpy(credentials->access_token, access_token);
 	
 	credentials->refresh_token = malloc(strlen(refresh_token) + 1);
+	
+	if (credentials->refresh_token == NULL) {
+		return UERR_MEMORY_ALLOCATE_FAILURE;
+	} 
+	
 	strcpy(credentials->refresh_token, refresh_token);
 	
 	credentials->expires_in = expires_in;
@@ -328,8 +338,13 @@ static int get_resources(
 	resources->size = sizeof(struct Resource) * array_size;
 	resources->items = malloc(resources->size);
 	
+	if (resources->items == NULL) {
+		return UERR_MEMORY_ALLOCATE_FAILURE;
+	}
+	
 	json_array_foreach(obj, index, item) {
 		if (!json_is_object(item)) {
+			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -380,6 +395,7 @@ static int get_resources(
 			
 			if (tmp == NULL) {
 				curl_slist_free_all(list);
+				json_decref(tree);
 				return UERR_CURL_FAILURE;
 			}
 			
@@ -389,28 +405,31 @@ static int get_resources(
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
 		
 		if (curl_easy_perform(curl) != CURLE_OK) {
+			json_decref(tree);
 			return UERR_CURL_FAILURE;
 		}
 		
 		curl_slist_free_all(list);
 		
-		json_t* tree = json_loads(string.s, 0, NULL);
+		json_t* subtree = json_loads(string.s, 0, NULL);
 		
 		string_free(&string);
 		
-		if (tree == NULL) {
+		if (subtree == NULL) {
 			return UERR_JSON_CANNOT_PARSE;
 		}
 		
-		obj = json_object_get(tree, "name");
+		obj = json_object_get(subtree, "name");
 		
 		if (obj == NULL) {
 			json_decref(tree);
+			json_decref(subtree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_string(obj)) {
 			json_decref(tree);
+			json_decref(subtree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -421,13 +440,21 @@ static int get_resources(
 			.subdomain = malloc(strlen(subdomain) + 1)
 		};
 		
+		if (resource.name == NULL || resource.subdomain == NULL) {
+			json_decref(tree);
+			json_decref(subtree);
+			return UERR_MEMORY_ALLOCATE_FAILURE;
+		}
+		
 		strcpy(resource.name, name);
 		strcpy(resource.subdomain, subdomain);
 		
 		resources->items[resources->offset++] = resource;
 		
-		json_decref(tree);
+		json_decref(subtree);
 	}
+	
+	json_decref(tree);
 	
 	return UERR_SUCCESS;
 	
@@ -845,7 +872,7 @@ static int get_page(
 			}
 			
 			json_t* tree = json_loads(string.s, 0, NULL);
-			
+			puts(string.s);
 			string_free(&string);
 			
 			if (tree == NULL) {
@@ -888,7 +915,7 @@ static int get_page(
 
 int b() {
 	
-	#ifdef _WIN32
+	#ifdef WIN32
 		SetConsoleOutputCP(CP_UTF8);
 		SetConsoleCP(CP_UTF8);
 	#endif
@@ -1423,6 +1450,8 @@ int b() {
 						while (still_running) {
 							CURLMcode mc = curl_multi_perform(multi_handle, &still_running);
 							
+							printf("\r+ Atualmente em progresso: %i%% / 100%%", (((downloads_offset - still_running) * 100) / downloads_offset));
+							
 							if (still_running) {
 								mc = curl_multi_poll(multi_handle, NULL, 0, 1000, NULL);
 							}
@@ -1432,22 +1461,13 @@ int b() {
 							}
 						}
 						
+						printf("\n");
+						
 						CURLMsg* msg = NULL;
 						int msgs_left = 0;
 						
-						while((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
-							if(msg->msg == CURLMSG_DONE) {
-								
-								/* Find out which handle this message is about */
-								for (size_t index = 0; index < downloads_offset; index++) {
-									struct SegmentDownload download = downloads[index];
-									CURL* handle = download.handle;
-									
-									int found = (msg->easy_handle == handle);
-									if(found)
-										break;
-								}
-								
+						while ((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
+							if (msg->msg == CURLMSG_DONE) {
 								const CURLcode code = msg->data.result;
 								
 								if (code != CURLE_OK) {

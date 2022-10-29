@@ -24,6 +24,6 @@ size_t curl_write_cb(char *chunk, size_t size, size_t nmemb, struct String* stri
 	
 }
 
-size_t curl_write_file_cb(char *chunk, size_t size, size_t nmemb, FILE* stream) {
-	return fwrite(chunk, size, nmemb, stream);
+size_t curl_write_file_cb(char *chunk, size_t size, size_t nmemb, void* ptr) {
+	return fwrite(chunk, size, nmemb, (FILE*) ptr);
 }
