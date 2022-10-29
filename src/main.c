@@ -100,6 +100,7 @@ static const char HTTP_HEADER_AUTHORIZATION[] = "Authorization";
 static const char HTTP_HEADER_REFERER[] = "Referer";
 static const char HTTP_HEADER_CLUB[] = "Club";
 static const char HTTP_DEFAULT_USER_AGENT[] = "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/106.0.0.0 Safari/537.36";
+static const char HTTP_AUTHENTICATION_BEARER[] = "Bearer";
 
 static const char HTTP_HEADER_SEPARATOR[] = ": ";
 
@@ -162,7 +163,7 @@ static int authorize(
 		return UERR_CURL_FAILURE;
 	}
 	
-	struct Query query = {};
+	struct Query query = {0};
 	
 	add_parameter(&query, "grant_type", "password");
 	add_parameter(&query, "username", user);
@@ -240,23 +241,17 @@ static int authorize(
 	
 	const int expires_in = json_integer_value(obj);
 	
+	credentials->expires_in = expires_in;
+	
 	credentials->access_token = malloc(strlen(access_token) + 1);
-	
-	if (credentials->access_token == NULL) {
-		return UERR_MEMORY_ALLOCATE_FAILURE;
-	} 
-	
-	strcpy(credentials->access_token, access_token);
-	
 	credentials->refresh_token = malloc(strlen(refresh_token) + 1);
 	
-	if (credentials->refresh_token == NULL) {
+	if (credentials->access_token == NULL || credentials->refresh_token == NULL) {
 		return UERR_MEMORY_ALLOCATE_FAILURE;
-	} 
+	}
 	
+	strcpy(credentials->access_token, access_token);
 	strcpy(credentials->refresh_token, refresh_token);
-	
-	credentials->expires_in = expires_in;
 	
 	json_decref(tree);
 	
@@ -266,7 +261,7 @@ static int authorize(
 
 static int get_resources(
 	const struct Credentials* const credentials,
-	struct Resources* resources
+	struct Resources* const resources
 ) {
 	
 	struct Query query = {0};
@@ -324,8 +319,8 @@ static int get_resources(
 		return UERR_JSON_NON_MATCHING_TYPE;
 	}
 	
-	char authorization[6 + strlen(SPACE) + strlen(credentials->access_token) + 1];
-	strcpy(authorization, "Bearer");
+	char authorization[strlen(HTTP_AUTHENTICATION_BEARER) + strlen(SPACE) + strlen(credentials->access_token) + 1];
+	strcpy(authorization, HTTP_AUTHENTICATION_BEARER);
 	strcat(authorization, SPACE);
 	strcat(authorization, credentials->access_token);
 	
@@ -416,6 +411,7 @@ static int get_resources(
 		string_free(&string);
 		
 		if (subtree == NULL) {
+			json_decref(tree);
 			return UERR_JSON_CANNOT_PARSE;
 		}
 		
@@ -462,11 +458,11 @@ static int get_resources(
 
 static int get_modules(
 	const struct Credentials* const credentials,
-	struct Resource* resource
+	struct Resource* const resource
 ) {
 	
-	char authorization[6 + strlen(SPACE) + strlen(credentials->access_token) + 1];
-	strcpy(authorization, "Bearer");
+	char authorization[strlen(HTTP_AUTHENTICATION_BEARER) + strlen(SPACE) + strlen(credentials->access_token) + 1];
+	strcpy(authorization, HTTP_AUTHENTICATION_BEARER);
 	strcat(authorization, SPACE);
 	strcat(authorization, credentials->access_token);
 	
@@ -539,6 +535,11 @@ static int get_modules(
 	resource->modules.size = sizeof(struct Module) * array_size;
 	resource->modules.items = malloc(resource->modules.size);
 	
+	if (resource->modules.items == NULL) {
+		json_decref(tree);
+		return UERR_MEMORY_ALLOCATE_FAILURE;
+	}
+	
 	json_array_foreach(obj, index, item) {
 		if (!json_is_object(item)) {
 			return UERR_JSON_NON_MATCHING_TYPE;
@@ -577,6 +578,11 @@ static int get_modules(
 			.name = malloc(strlen(name) + 1)
 		};
 		
+		if (module.id == NULL || module.name == NULL) {
+			json_decref(tree);
+			return UERR_MEMORY_ALLOCATE_FAILURE;
+		}
+		
 		strcpy(module.id, id);
 		strcpy(module.name, name);
 		
@@ -598,6 +604,11 @@ static int get_modules(
 		
 		module.pages.size = sizeof(struct Page) * array_size;
 		module.pages.items = malloc(module.pages.size);
+		
+		if (module.pages.items == NULL) {
+			json_decref(tree);
+			return UERR_MEMORY_ALLOCATE_FAILURE;
+		}
 		
 		json_array_foreach(obj, page_index, page_item) {
 			if (!json_is_object(page_item)) {
@@ -637,6 +648,11 @@ static int get_modules(
 				.name = malloc(strlen(name) + 1)
 			};
 			
+			if (page.id == NULL || page.name == NULL) {
+				json_decref(tree);
+				return UERR_MEMORY_ALLOCATE_FAILURE;
+			}
+			
 			strcpy(page.id, hash);
 			strcpy(page.name, name);
 			
@@ -646,18 +662,20 @@ static int get_modules(
 		resource->modules.items[resource->modules.offset++] = module;
 	}
 	
+	json_decref(tree);
+	
 	return UERR_SUCCESS;
 	
 }
 
 static int get_page(
 	const struct Credentials* const credentials,
-	const struct Resource* resource,
-	struct Page* page
+	const struct Resource* const resource,
+	struct Page* const page
 ) {
 	
-	char authorization[6 + strlen(SPACE) + strlen(credentials->access_token) + 1];
-	strcpy(authorization, "Bearer");
+	char authorization[strlen(HTTP_AUTHENTICATION_BEARER) + strlen(SPACE) + strlen(credentials->access_token) + 1];
+	strcpy(authorization, HTTP_AUTHENTICATION_BEARER);
 	strcat(authorization, SPACE);
 	strcat(authorization, credentials->access_token);
 	
@@ -703,8 +721,11 @@ static int get_page(
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	
 	if (curl_easy_perform(curl) != CURLE_OK) {
+		curl_slist_free_all(list);
 		return UERR_CURL_FAILURE;
 	}
+	
+	curl_slist_free_all(list);
 	
 	json_t* tree = json_loads(string.s, 0, NULL);
 	
@@ -718,6 +739,7 @@ static int get_page(
 	
 	if (obj != NULL) {
 		if (!json_is_array(obj)) {
+			curl_slist_free_all(list);
 			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
@@ -729,19 +751,29 @@ static int get_page(
 		page->medias.size = sizeof(struct Media) * array_size;
 		page->medias.items = malloc(page->medias.size);
 		
+		if (page->medias.items == NULL) {
+			curl_slist_free_all(list);
+			json_decref(tree);
+			return UERR_MEMORY_ALLOCATE_FAILURE;
+		}
+		
 		json_array_foreach(obj, index, item) {
 			if (!json_is_object(item)) {
+				curl_slist_free_all(list);
+				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
 			const json_t* obj = json_object_get(item, "mediaSrcUrl");
 			
 			if (obj == NULL) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
@@ -751,6 +783,8 @@ static int get_page(
 			curl_easy_setopt(curl, CURLOPT_URL, media_page);
 			
 			if (curl_easy_perform(curl) != CURLE_OK) {
+				curl_slist_free_all(list);
+				json_decref(tree);
 				return UERR_CURL_FAILURE;
 			}
 			
@@ -758,6 +792,7 @@ static int get_page(
 			
 			if (ptr == NULL) {
 				string_free(&string);
+				json_decref(tree);
 				return UERR_STRSTR_FAILURE;
 			}
 			
@@ -769,6 +804,8 @@ static int get_page(
 			char url[size + 1];
 			memcpy(url, start, size);
 			url[size] = '\0';
+			
+			string_free(&string);
 			
 			for (size_t index = 0; index < size; index++) {
 				char* offset = &url[index];
@@ -784,11 +821,14 @@ static int get_page(
 				}
 			}
 			
-			string_free(&string);
-			
 			struct Media media = {
 				.url = malloc(strlen(url) + 1)
 			};
+			
+			if (media.url == NULL) {
+				json_decref(tree);
+				return UERR_MEMORY_ALLOCATE_FAILURE;
+			}
 			
 			strcpy(media.url, url);
 			
@@ -801,6 +841,7 @@ static int get_page(
 	
 	if (obj != NULL) {
 		if (!json_is_array(obj)) {
+			curl_slist_free_all(list);
 			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
@@ -812,19 +853,29 @@ static int get_page(
 		page->attachments.size = sizeof(struct Attachment) * array_size;
 		page->attachments.items = malloc(page->attachments.size);
 		
+		if (page->attachments.items == NULL) {
+			curl_slist_free_all(list);
+			json_decref(tree);
+			return UERR_MEMORY_ALLOCATE_FAILURE;
+		}
+		
 		json_array_foreach(obj, index, item) {
 			if (!json_is_object(item)) {
+				curl_slist_free_all(list);
+				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
 			const json_t* obj = json_object_get(item, "fileName");
 			
 			if (obj == NULL) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
@@ -847,11 +898,13 @@ static int get_page(
 			obj = json_object_get(item, "fileMembershipId");
 			
 			if (obj == NULL) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
@@ -868,26 +921,32 @@ static int get_page(
 			curl_easy_setopt(curl, CURLOPT_URL, url);
 			
 			if (curl_easy_perform(curl) != CURLE_OK) {
+				json_decref(tree);
+				curl_slist_free_all(list);
 				return UERR_CURL_FAILURE;
 			}
 			
-			json_t* tree = json_loads(string.s, 0, NULL);
-			puts(string.s);
+			curl_slist_free_all(list);
+			
+			json_t* subtree = json_loads(string.s, 0, NULL);
+			
 			string_free(&string);
 			
 			if (tree == NULL) {
 				return UERR_JSON_CANNOT_PARSE;
 			}
 			
-			obj = json_object_get(tree, "directDownloadUrl");
+			obj = json_object_get(subtree, "directDownloadUrl");
 			
 			if (obj == NULL) {
 				json_decref(tree);
+				json_decref(subtree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
 				json_decref(tree);
+				json_decref(subtree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
@@ -898,8 +957,16 @@ static int get_page(
 				.extension = malloc(strlen(start) + 1)
 			};
 			
+			if (attachment.url == NULL || attachment.extension == NULL) {
+				json_decref(tree);
+				json_decref(subtree);
+				return UERR_MEMORY_ALLOCATE_FAILURE;
+			}
+			
 			strcpy(attachment.url, download_url);
 			strcpy(attachment.extension, start);
+			
+			json_decref(subtree);
 			
 			page->attachments.items[page->attachments.offset++] = attachment;
 			
