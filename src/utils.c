@@ -268,7 +268,7 @@ int directory_exists(const char* const directory) {
 }
 
 int file_exists(const char* const filename) {
-	
+	return 1;
 	/*
 	Returns 1 (true) if file exists and is a regular file or symlink, 0 (false) otherwise.
 	Directories, device files, named pipes and sockets return false.

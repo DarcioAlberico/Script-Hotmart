@@ -725,8 +725,6 @@ static int get_page(
 		return UERR_CURL_FAILURE;
 	}
 	
-	curl_slist_free_all(list);
-	
 	json_t* tree = json_loads(string.s, 0, NULL);
 	
 	string_free(&string);
