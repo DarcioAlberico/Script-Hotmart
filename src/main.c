@@ -824,6 +824,7 @@ static int get_page(
 			};
 			
 			if (media.url == NULL) {
+				curl_slist_free_all(list);
 				json_decref(tree);
 				return UERR_MEMORY_ALLOCATE_FAILURE;
 			}
@@ -967,8 +968,6 @@ static int get_page(
 			json_decref(subtree);
 			
 			page->attachments.items[page->attachments.offset++] = attachment;
-			
-			json_decref(tree);
 		}
 	}
 	
