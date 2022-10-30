@@ -1,5 +1,4 @@
 #include <stdlib.h>
-#include <locale.h>
 
 #if defined(WIN32) && defined(UNICODE)
 	#include <stdarg.h>
@@ -80,9 +79,24 @@ struct SegmentDownload {
 		
 	};
 	
+	char* __fgets(char* const s, const int n, FILE* const stream) {
+		
+		wchar_t ws[n];
+		
+		if (fgetws(ws, n, stream) == NULL) {
+			return NULL;
+		}
+		
+		WideCharToMultiByte(CP_UTF8, 0, ws, -1, s, n, NULL, NULL);
+		
+		return s;
+		
+	}
+	
 	#define printf __printf
 	#define fprintf __fprintf
 	#define fopen __fopen
+	#define fgets __fgets
 #endif
 
 static const char JSON_FILE_EXTENSION[] = "json";
@@ -148,7 +162,7 @@ static CURL* curl = NULL;
 static int authorize(
 	const char* const username,
 	const char* const password,
-	struct Credentials* credentials
+	struct Credentials* const credentials
 ) {
 	
 	char* user = curl_easy_escape(NULL, username, 0);
@@ -191,7 +205,7 @@ static int authorize(
 		return UERR_CURL_FAILURE;
 	}
 	
-	json_t* tree = json_loads(string.s, 0, NULL);
+	json_auto_t* tree = json_loads(string.s, 0, NULL);
 	
 	string_free(&string);
 	
@@ -299,7 +313,7 @@ static int get_resources(
 		return UERR_CURL_FAILURE;
 	}
 	
-	json_t* tree = json_loads(string.s, 0, NULL);
+	json_auto_t* tree = json_loads(string.s, 0, NULL);
 	
 	string_free(&string);
 	
@@ -506,7 +520,7 @@ static int get_modules(
 	
 	curl_slist_free_all(list);
 	
-	json_t* tree = json_loads(string.s, 0, NULL);
+	json_auto_t* tree = json_loads(string.s, 0, NULL);
 	
 	string_free(&string);
 	
@@ -725,7 +739,7 @@ static int get_page(
 		return UERR_CURL_FAILURE;
 	}
 	
-	json_t* tree = json_loads(string.s, 0, NULL);
+	json_auto_t* tree = json_loads(string.s, 0, NULL);
 	
 	string_free(&string);
 	
@@ -984,7 +998,6 @@ int b() {
 	#endif
 	
 	if (!directory_exists(APP_CONFIG_DIRECTORY)) {
-		setlocale(LC_ALL, ".UTF8");
 		fprintf(stderr, "- Diretório de configurações não encontrado, criando-o\r\n");
 		
 		if (!create_directory(APP_CONFIG_DIRECTORY)) {
@@ -1031,7 +1044,6 @@ int b() {
 	
 	*strchr(password, '\n') = '\0';
 	
-	
 	curl_global_init(CURL_GLOBAL_ALL);
 	curl = curl_easy_init();
 	
@@ -1075,9 +1087,8 @@ int b() {
 	int code = 0;
 	
 	struct Credentials credentials = {0};
-	code = authorize(username, password, &credentials);
 	
-	if (code != UERR_SUCCESS) {
+	if (authorize(username, password, &credentials) != UERR_SUCCESS) {
 		fprintf(stderr, "- Não foi possível realizar a autenticação!\r\n");
 		exit(EXIT_FAILURE);
 	}
@@ -1087,10 +1098,22 @@ int b() {
 	char sha256[(br_sha256_SIZE * 2) + 1];
 	sha256_digest(username, sha256);
 	
+	char hex[strlen(username) * 2 + 1];
+	size_t hex_offset = 0;
+	
+	for (size_t index = 0; index < strlen(username); index++) {
+		const char ch = username[index];
+		
+		hex[hex_offset++] = to_hex((ch & 0xF0) >> 4);
+		hex[hex_offset++] = to_hex((ch & 0x0F) >> 0);
+	}
+	
+	hex[hex_offset] = '\0';
+	
 	char filename[strlen(APP_CONFIG_DIRECTORY) + strlen(SLASH) + strlen(sha256) + strlen(DOT) + strlen(JSON_FILE_EXTENSION) + 1];
 	strcpy(filename, APP_CONFIG_DIRECTORY);
 	strcat(filename, SLASH);
-	strcat(filename, sha256);
+	strcat(filename, hex);
 	strcat(filename, DOT);
 	strcat(filename, JSON_FILE_EXTENSION);
 	
@@ -1103,7 +1126,7 @@ int b() {
 		exit(EXIT_FAILURE);
 	}
 	
-	json_t* tree = json_object();
+	json_auto_t* tree = json_object();
 	json_object_set_new(tree, "username", json_string(username));
 	json_object_set_new(tree, "access_token", json_string(credentials.access_token));
 	json_object_set_new(tree, "refresh_token", json_string(credentials.refresh_token));
@@ -1128,9 +1151,8 @@ int b() {
 	printf("+ Obtendo lista de produtos\r\n");
 	
 	struct Resources resources = {0};
-	code = get_resources(&credentials, &resources);
 	
-	if (code != UERR_SUCCESS) {
+	if (get_resources(&credentials, &resources) != UERR_SUCCESS) {
 		fprintf(stderr, "- Não foi possível obter a lista de produtos!\r\n");
 		exit(EXIT_FAILURE);
 	}
@@ -1348,10 +1370,9 @@ int b() {
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
 						
-						//curl_free(url);
-						
 						if (curl_easy_perform(curl) != CURLE_OK) {
-							return UERR_CURL_FAILURE;
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							exit(EXIT_FAILURE);
 						}
 						
 						if (m3u8_parse(&tags, string.s) != UERR_SUCCESS) {
@@ -1549,15 +1570,15 @@ int b() {
 							exit(EXIT_FAILURE);
 						}
 						
-						tags_dumpf(&tags, stream);
-						
-						if (!tags_dumpf(&tags, stream)) {
-							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
-						}
+						const int ok = tags_dumpf(&tags, stream);
 						
 						fclose(stream);
 						m3u8_free(&tags);
+						
+						if (!ok) {
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							exit(EXIT_FAILURE);
+						}
 						
 						for (size_t index = 0; index < downloads_offset; index++) {
 							struct SegmentDownload* download = &downloads[index];
@@ -1660,7 +1681,7 @@ int b() {
 						fprintf(stderr, "- O arquivo '%s' não existe, ele será baixado\r\n", attachment_filename);
 						printf("+ Baixando de '%s' para '%s'\r\n", attachment->url, attachment_filename);
 						
-						FILE* stream = fopen(attachment_filename, "wb");
+						FILE* const stream = fopen(attachment_filename, "wb");
 						
 						if (stream == NULL) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
@@ -1695,6 +1716,5 @@ int b() {
 #endif
 
 int main() {
-	setlocale(LC_ALL, ".UTF8");
 	printf("%i\n", b());
 }
