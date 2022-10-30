@@ -99,6 +99,10 @@ struct SegmentDownload {
 	#define fgets __fgets
 #endif
 
+static void curl_slistp_free_all(struct curl_slist** ptr) {
+	curl_slist_free_all(*ptr);
+}
+
 static const char JSON_FILE_EXTENSION[] = "json";
 static const char MP4_FILE_EXTENSION[] = "mp4";
 static const char TS_FILE_EXTENSION[] = "ts";
@@ -195,7 +199,7 @@ static int authorize(
 	
 	free(post_fields);
 	
-	struct String string = {0};
+	struct String string __attribute__((__cleanup__(string_free))) = {0};
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
@@ -207,8 +211,6 @@ static int authorize(
 	
 	json_auto_t* tree = json_loads(string.s, 0, NULL);
 	
-	string_free(&string);
-	
 	if (tree == NULL) {
 		return UERR_JSON_CANNOT_PARSE;
 	}
@@ -216,12 +218,10 @@ static int authorize(
 	const json_t* obj = json_object_get(tree, "access_token");
 	
 	if (obj == NULL) {
-		json_decref(tree);
 		return UERR_JSON_MISSING_REQUIRED_KEY;
 	}
 	
 	if (!json_is_string(obj)) {
-		json_decref(tree);
 		return UERR_JSON_NON_MATCHING_TYPE;
 	}
 	
@@ -230,12 +230,10 @@ static int authorize(
 	obj = json_object_get(tree, "refresh_token");
 	
 	if (obj == NULL) {
-		json_decref(tree);
 		return UERR_JSON_MISSING_REQUIRED_KEY;
 	}
 	
 	if (!json_is_string(obj)) {
-		json_decref(tree);
 		return UERR_JSON_NON_MATCHING_TYPE;
 	}
 	
@@ -244,12 +242,10 @@ static int authorize(
 	obj = json_object_get(tree, "expires_in");
 	
 	if (obj == NULL) {
-		json_decref(tree);
 		return UERR_JSON_MISSING_REQUIRED_KEY;
 	}
 	
 	if (!json_is_integer(obj)) {
-		json_decref(tree);
 		return UERR_JSON_NON_MATCHING_TYPE;
 	}
 	
@@ -266,8 +262,6 @@ static int authorize(
 	
 	strcpy(credentials->access_token, access_token);
 	strcpy(credentials->refresh_token, refresh_token);
-	
-	json_decref(tree);
 	
 	return UERR_SUCCESS;
 	
@@ -303,7 +297,7 @@ static int get_resources(
 	curl_free(url);
 	free(squery);
 	
-	struct String string = {0};
+	struct String string __attribute__((__cleanup__(string_free))) = {0};
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
@@ -315,8 +309,6 @@ static int get_resources(
 	
 	json_auto_t* tree = json_loads(string.s, 0, NULL);
 	
-	string_free(&string);
-	
 	if (tree == NULL) {
 		return UERR_JSON_CANNOT_PARSE;
 	}
@@ -324,12 +316,10 @@ static int get_resources(
 	const json_t* obj = json_object_get(tree, "resources");
 	
 	if (obj == NULL) {
-		json_decref(tree);
 		return UERR_JSON_MISSING_REQUIRED_KEY;
 	}
 	
 	if (!json_is_array(obj)) {
-		json_decref(tree);
 		return UERR_JSON_NON_MATCHING_TYPE;
 	}
 	
@@ -353,31 +343,26 @@ static int get_resources(
 	
 	json_array_foreach(obj, index, item) {
 		if (!json_is_object(item)) {
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
 		const json_t* obj = json_object_get(item, "resource");
 		
 		if (obj == NULL) {
-			json_decref(tree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_object(obj)) {
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
 		obj = json_object_get(obj, "subdomain");
 		
 		if (obj == NULL) {
-			json_decref(tree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_string(obj)) {
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -388,7 +373,7 @@ static int get_resources(
 			{HTTP_HEADER_CLUB, subdomain}
 		};
 		
-		struct curl_slist* list = NULL;
+		struct curl_slist* list __attribute__((__cleanup__(curl_slistp_free_all))) = NULL;
 		
 		for (size_t index = 0; index < sizeof(headers) / sizeof(*headers); index++) {
 			const char** const header = (const char**) headers[index];
@@ -403,8 +388,6 @@ static int get_resources(
 			struct curl_slist* tmp = curl_slist_append(list, item);
 			
 			if (tmp == NULL) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_CURL_FAILURE;
 			}
 			
@@ -414,32 +397,22 @@ static int get_resources(
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
 		
 		if (curl_easy_perform(curl) != CURLE_OK) {
-			json_decref(tree);
 			return UERR_CURL_FAILURE;
 		}
 		
-		curl_slist_free_all(list);
-		
-		json_t* subtree = json_loads(string.s, 0, NULL);
-		
-		string_free(&string);
+		json_auto_t* subtree = json_loads(string.s, 0, NULL);
 		
 		if (subtree == NULL) {
-			json_decref(tree);
 			return UERR_JSON_CANNOT_PARSE;
 		}
 		
 		obj = json_object_get(subtree, "name");
 		
 		if (obj == NULL) {
-			json_decref(tree);
-			json_decref(subtree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_string(obj)) {
-			json_decref(tree);
-			json_decref(subtree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -451,8 +424,6 @@ static int get_resources(
 		};
 		
 		if (resource.name == NULL || resource.subdomain == NULL) {
-			json_decref(tree);
-			json_decref(subtree);
 			return UERR_MEMORY_ALLOCATE_FAILURE;
 		}
 		
@@ -460,11 +431,7 @@ static int get_resources(
 		strcpy(resource.subdomain, subdomain);
 		
 		resources->items[resources->offset++] = resource;
-		
-		json_decref(subtree);
 	}
-	
-	json_decref(tree);
 	
 	return UERR_SUCCESS;
 	
@@ -485,7 +452,7 @@ static int get_modules(
 		{HTTP_HEADER_CLUB, resource->subdomain}
 	};
 	
-	struct curl_slist* list = NULL;
+	struct curl_slist* list __attribute__((__cleanup__(curl_slistp_free_all))) = NULL;
 	
 	for (size_t index = 0; index < sizeof(headers) / sizeof(*headers); index++) {
 		const char** const header = (const char**) headers[index];
@@ -500,14 +467,13 @@ static int get_modules(
 		struct curl_slist* tmp = curl_slist_append(list, item);
 		
 		if (tmp == NULL) {
-			curl_slist_free_all(list);
 			return UERR_CURL_FAILURE;
 		}
 		
 		list = tmp;
 	}
 	
-	struct String string = {0};
+	struct String string __attribute__((__cleanup__(string_free))) = {0};
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
@@ -518,11 +484,7 @@ static int get_modules(
 		return UERR_CURL_FAILURE;
 	}
 	
-	curl_slist_free_all(list);
-	
 	json_auto_t* tree = json_loads(string.s, 0, NULL);
-	
-	string_free(&string);
 	
 	if (tree == NULL) {
 		return UERR_JSON_CANNOT_PARSE;
@@ -531,12 +493,10 @@ static int get_modules(
 	const json_t* obj = json_object_get(tree, "modules");
 	
 	if (obj == NULL) {
-		json_decref(tree);
 		return UERR_JSON_MISSING_REQUIRED_KEY;
 	}
 	
 	if (!json_is_array(obj)) {
-		json_decref(tree);
 		return UERR_JSON_NON_MATCHING_TYPE;
 	}
 	
@@ -550,7 +510,6 @@ static int get_modules(
 	resource->modules.items = malloc(resource->modules.size);
 	
 	if (resource->modules.items == NULL) {
-		json_decref(tree);
 		return UERR_MEMORY_ALLOCATE_FAILURE;
 	}
 	
@@ -562,12 +521,10 @@ static int get_modules(
 		const json_t* obj = json_object_get(item, "id");
 		
 		if (obj == NULL) {
-			json_decref(tree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_string(obj)) {
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -576,12 +533,10 @@ static int get_modules(
 		obj = json_object_get(item, "name");
 		
 		if (obj == NULL) {
-			json_decref(tree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_string(obj)) {
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -593,7 +548,6 @@ static int get_modules(
 		};
 		
 		if (module.id == NULL || module.name == NULL) {
-			json_decref(tree);
 			return UERR_MEMORY_ALLOCATE_FAILURE;
 		}
 		
@@ -603,12 +557,10 @@ static int get_modules(
 		obj = json_object_get(item, "pages");
 		
 		if (obj == NULL) {
-			json_decref(tree);
 			return UERR_JSON_MISSING_REQUIRED_KEY;
 		}
 		
 		if (!json_is_array(obj)) {
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -620,7 +572,6 @@ static int get_modules(
 		module.pages.items = malloc(module.pages.size);
 		
 		if (module.pages.items == NULL) {
-			json_decref(tree);
 			return UERR_MEMORY_ALLOCATE_FAILURE;
 		}
 		
@@ -632,12 +583,10 @@ static int get_modules(
 			const json_t* obj = json_object_get(page_item, "hash");
 			
 			if (obj == NULL) {
-				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
@@ -646,12 +595,10 @@ static int get_modules(
 			obj = json_object_get(page_item, "name");
 			
 			if (obj == NULL) {
-				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
@@ -663,7 +610,6 @@ static int get_modules(
 			};
 			
 			if (page.id == NULL || page.name == NULL) {
-				json_decref(tree);
 				return UERR_MEMORY_ALLOCATE_FAILURE;
 			}
 			
@@ -675,8 +621,6 @@ static int get_modules(
 		
 		resource->modules.items[resource->modules.offset++] = module;
 	}
-	
-	json_decref(tree);
 	
 	return UERR_SUCCESS;
 	
@@ -699,7 +643,7 @@ static int get_page(
 		{HTTP_HEADER_REFERER, "https://hotmart.com"}
 	};
 	
-	struct curl_slist* list = NULL;
+	struct curl_slist* list __attribute__((__cleanup__(curl_slistp_free_all))) = NULL;
 	
 	for (size_t index = 0; index < sizeof(headers) / sizeof(*headers); index++) {
 		const char** const header = (const char**) headers[index];
@@ -714,14 +658,13 @@ static int get_page(
 		struct curl_slist* tmp = curl_slist_append(list, item);
 		
 		if (tmp == NULL) {
-			curl_slist_free_all(list);
 			return UERR_CURL_FAILURE;
 		}
 		
 		list = tmp;
 	}
 	
-	struct String string = {0};
+	struct String string __attribute__((__cleanup__(string_free))) = {0};
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
@@ -735,13 +678,10 @@ static int get_page(
 	curl_easy_setopt(curl, CURLOPT_URL, url);
 	
 	if (curl_easy_perform(curl) != CURLE_OK) {
-		curl_slist_free_all(list);
 		return UERR_CURL_FAILURE;
 	}
 	
 	json_auto_t* tree = json_loads(string.s, 0, NULL);
-	
-	string_free(&string);
 	
 	if (tree == NULL) {
 		return UERR_JSON_CANNOT_PARSE;
@@ -751,8 +691,6 @@ static int get_page(
 	
 	if (obj != NULL) {
 		if (!json_is_array(obj)) {
-			curl_slist_free_all(list);
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -764,60 +702,49 @@ static int get_page(
 		page->medias.items = malloc(page->medias.size);
 		
 		if (page->medias.items == NULL) {
-			curl_slist_free_all(list);
-			json_decref(tree);
 			return UERR_MEMORY_ALLOCATE_FAILURE;
 		}
 		
 		json_array_foreach(obj, index, item) {
 			if (!json_is_object(item)) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
 			const json_t* obj = json_object_get(item, "mediaSrcUrl");
 			
 			if (obj == NULL) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
 			const char* const media_page = json_string_value(obj);
 			
+			struct String string __attribute__((__cleanup__(string_free))) = {0};
+			
+			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 			curl_easy_setopt(curl, CURLOPT_URL, media_page);
 			
 			if (curl_easy_perform(curl) != CURLE_OK) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_CURL_FAILURE;
 			}
 			
 			const char* const ptr = strstr(string.s, "mediaAssets");
 			
 			if (ptr == NULL) {
-				string_free(&string);
-				json_decref(tree);
 				return UERR_STRSTR_FAILURE;
 			}
 			
 			const char* const start = strstr(ptr, HTTPS_SCHEME);
 			const char* const end = strstr(start, QUOTATION_MARK);
 			
-			size_t size = end - start;
+			size_t size = (size_t) (end - start);
 			
 			char url[size + 1];
 			memcpy(url, start, size);
 			url[size] = '\0';
-			
-			string_free(&string);
 			
 			for (size_t index = 0; index < size; index++) {
 				char* offset = &url[index];
@@ -838,8 +765,6 @@ static int get_page(
 			};
 			
 			if (media.url == NULL) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_MEMORY_ALLOCATE_FAILURE;
 			}
 			
@@ -854,8 +779,6 @@ static int get_page(
 	
 	if (obj != NULL) {
 		if (!json_is_array(obj)) {
-			curl_slist_free_all(list);
-			json_decref(tree);
 			return UERR_JSON_NON_MATCHING_TYPE;
 		}
 		
@@ -867,29 +790,21 @@ static int get_page(
 		page->attachments.items = malloc(page->attachments.size);
 		
 		if (page->attachments.items == NULL) {
-			curl_slist_free_all(list);
-			json_decref(tree);
 			return UERR_MEMORY_ALLOCATE_FAILURE;
 		}
 		
 		json_array_foreach(obj, index, item) {
 			if (!json_is_object(item)) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
 			const json_t* obj = json_object_get(item, "fileName");
 			
 			if (obj == NULL) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
@@ -911,14 +826,10 @@ static int get_page(
 			obj = json_object_get(item, "fileMembershipId");
 			
 			if (obj == NULL) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
-				curl_slist_free_all(list);
-				json_decref(tree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
@@ -931,17 +842,16 @@ static int get_page(
 			strcat(url, SLASH);
 			strcat(url, "download");
 			
+			struct String string __attribute__((__cleanup__(string_free))) = {0};
+			
+			curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 			curl_easy_setopt(curl, CURLOPT_URL, url);
 			
 			if (curl_easy_perform(curl) != CURLE_OK) {
-				json_decref(tree);
-				curl_slist_free_all(list);
 				return UERR_CURL_FAILURE;
 			}
 			
-			json_t* subtree = json_loads(string.s, 0, NULL);
-			
-			string_free(&string);
+			json_auto_t* subtree = json_loads(string.s, 0, NULL);
 			
 			if (tree == NULL) {
 				return UERR_JSON_CANNOT_PARSE;
@@ -950,14 +860,10 @@ static int get_page(
 			obj = json_object_get(subtree, "directDownloadUrl");
 			
 			if (obj == NULL) {
-				json_decref(tree);
-				json_decref(subtree);
 				return UERR_JSON_MISSING_REQUIRED_KEY;
 			}
 			
 			if (!json_is_string(obj)) {
-				json_decref(tree);
-				json_decref(subtree);
 				return UERR_JSON_NON_MATCHING_TYPE;
 			}
 			
@@ -969,22 +875,15 @@ static int get_page(
 			};
 			
 			if (attachment.url == NULL || attachment.extension == NULL) {
-				json_decref(tree);
-				json_decref(subtree);
 				return UERR_MEMORY_ALLOCATE_FAILURE;
 			}
 			
 			strcpy(attachment.url, download_url);
 			strcpy(attachment.extension, start);
 			
-			json_decref(subtree);
-			
 			page->attachments.items[page->attachments.offset++] = attachment;
 		}
 	}
-	
-	json_decref(tree);
-	curl_slist_free_all(list);
 	
 	return UERR_SUCCESS;
 	
@@ -1002,14 +901,14 @@ int b() {
 		
 		if (!create_directory(APP_CONFIG_DIRECTORY)) {
 			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
 		/*
 		char* fullpath = NULL;
 		
 		if (!expand_filename(APP_CONFIG_DIRECTORY, &fullpath)) {
 			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
 		*/
 		
@@ -1048,7 +947,8 @@ int b() {
 	curl = curl_easy_init();
 	
 	if (curl == NULL) {
-		return UERR_CURL_FAILURE;
+		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+		return EXIT_FAILURE;
 	}
 	
 	curl_easy_setopt(curl, CURLOPT_TIMEOUT, 60L);
@@ -1067,7 +967,7 @@ int b() {
 	
 	curl_easy_setopt(curl, CURLOPT_CAINFO_BLOB, &blob);
 	
-	struct curl_slist* resolve_list = NULL;
+	struct curl_slist* resolve_list __attribute__((__cleanup__(curl_slistp_free_all))) = NULL;
 	
 	for (size_t index = 0; index < sizeof(HOSTNAMES) / sizeof(*HOSTNAMES); index++) {
 		const char* const hostname = HOSTNAMES[index];
@@ -1075,8 +975,8 @@ int b() {
 		struct curl_slist* tmp = curl_slist_append(resolve_list, hostname);
 		
 		if (tmp == NULL) {
-			curl_slist_free_all(resolve_list);
-			return UERR_CURL_FAILURE;
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
 		}
 		
 		resolve_list = tmp;
@@ -1090,13 +990,10 @@ int b() {
 	
 	if (authorize(username, password, &credentials) != UERR_SUCCESS) {
 		fprintf(stderr, "- Não foi possível realizar a autenticação!\r\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	printf("+ Usuário autenticado com sucesso!\r\n");
-	
-	char sha256[(br_sha256_SIZE * 2) + 1];
-	sha256_digest(username, sha256);
 	
 	char hex[strlen(username) * 2 + 1];
 	size_t hex_offset = 0;
@@ -1110,7 +1007,7 @@ int b() {
 	
 	hex[hex_offset] = '\0';
 	
-	char filename[strlen(APP_CONFIG_DIRECTORY) + strlen(SLASH) + strlen(sha256) + strlen(DOT) + strlen(JSON_FILE_EXTENSION) + 1];
+	char filename[strlen(APP_CONFIG_DIRECTORY) + strlen(SLASH) + strlen(hex) + strlen(DOT) + strlen(JSON_FILE_EXTENSION) + 1];
 	strcpy(filename, APP_CONFIG_DIRECTORY);
 	strcat(filename, SLASH);
 	strcat(filename, hex);
@@ -1123,7 +1020,7 @@ int b() {
 	
 	if (file == NULL) {
 		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	json_auto_t* tree = json_object();
@@ -1138,12 +1035,11 @@ int b() {
 	const size_t wsize = fwrite(buffer, sizeof(*buffer), buffer_size, file);
 	
 	free(buffer);
-	json_decref(tree);
 	fclose(file);
 	
 	if (wsize != buffer_size) {
 		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	printf("+ Arquivo de credenciais exportado com sucesso!\r\n");
@@ -1154,7 +1050,7 @@ int b() {
 	
 	if (get_resources(&credentials, &resources) != UERR_SUCCESS) {
 		fprintf(stderr, "- Não foi possível obter a lista de produtos!\r\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	printf("+ Selecione o que deseja baixar:\r\n\r\n");
@@ -1210,7 +1106,7 @@ int b() {
 	
 	if (!expand_filename(".", &cwd)) {
 		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-		exit(EXIT_FAILURE);
+		return EXIT_FAILURE;
 	}
 	
 	for (size_t index = 0; index < queue_count; index++) {
@@ -1220,7 +1116,7 @@ int b() {
 		
 		if (get_modules(&credentials, resource) != UERR_SUCCESS) {
 			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-			exit(EXIT_FAILURE);
+			return EXIT_FAILURE;
 		}
 		
 		char directory[strlen(resource->name) + 1];
@@ -1237,7 +1133,7 @@ int b() {
 			
 			if (!create_directory(resource_directory)) {
 				fprintf(stderr, "- Ocorreu um erro ao tentar criar o diretório!\r\n");
-				exit(EXIT_FAILURE);
+				return EXIT_FAILURE;
 			}
 		}
 		
@@ -1260,7 +1156,7 @@ int b() {
 				
 				if (!create_directory(module_directory)) {
 					fprintf(stderr, "- Ocorreu um erro ao tentar criar o diretório!\r\n");
-					exit(EXIT_FAILURE);
+					return EXIT_FAILURE;
 				}
 			}
 			
@@ -1271,7 +1167,7 @@ int b() {
 				
 				if (get_page(&credentials, resource, page) != UERR_SUCCESS) {
 					fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-					exit(EXIT_FAILURE);
+					return EXIT_FAILURE;
 				}
 				
 				printf("+ Verificando estado da página '%s'\r\n", page->name);
@@ -1290,7 +1186,7 @@ int b() {
 					
 					if (!create_directory(page_directory)) {
 						fprintf(stderr, "- Ocorreu um erro ao tentar criar o diretório!\r\n");
-						exit(EXIT_FAILURE);
+						return EXIT_FAILURE;
 					}
 				}
 				
@@ -1312,23 +1208,22 @@ int b() {
 						fprintf(stderr, "- O arquivo '%s' não existe, ele será baixado\r\n", media_filename);
 						printf("+ Baixando de '%s' para '%s'\r\n", media->url, media_filename);
 						
-						struct String string = {0};
+						struct String string __attribute__((__cleanup__(string_free))) = {0};
 						
 						curl_easy_setopt(curl, CURLOPT_URL, media->url);
 						curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 						
 						if (curl_easy_perform(curl) != CURLE_OK) {
-							return UERR_CURL_FAILURE;
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							return EXIT_FAILURE;
 						}
 						
 						struct Tags tags = {0};
 						
 						if (m3u8_parse(&tags, string.s) != UERR_SUCCESS) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
-						
-						string_free(&string);
 						
 						int last_width = 0;
 						const char* playlist_uri = NULL;
@@ -1359,7 +1254,7 @@ int b() {
 							}
 						}
 						
-						CURLU *cu = curl_url();
+						CURLU* cu = curl_url();
 						curl_url_set(cu, CURLUPART_URL, media->url, 0);
 						curl_url_set(cu, CURLUPART_URL, playlist_uri, 0);
 						
@@ -1372,12 +1267,12 @@ int b() {
 						
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 						
 						if (m3u8_parse(&tags, string.s) != UERR_SUCCESS) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 						
 						int segment_number = 1;
@@ -1389,7 +1284,7 @@ int b() {
 						
 						if (multi_handle == NULL) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 						
 						curl_multi_setopt(multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, (long) 30);
@@ -1427,7 +1322,7 @@ int b() {
 								
 								if (handle == NULL) {
 									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-									exit(EXIT_FAILURE);
+									return EXIT_FAILURE;
 								}
 								
 								curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1L);
@@ -1444,11 +1339,11 @@ int b() {
 								
 								curl_free(url);
 								
-								FILE* stream = fopen(filename, "wb");
+								FILE* const stream = fopen(filename, "wb");
 								
 								if (stream == NULL) {
 									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-									exit(EXIT_FAILURE);
+									return EXIT_FAILURE;
 								}
 								
 								curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void*) stream);
@@ -1487,7 +1382,7 @@ int b() {
 								
 								if (handle == NULL) {
 									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-									exit(EXIT_FAILURE);
+									return EXIT_FAILURE;
 								}
 								
 								curl_easy_setopt(handle, CURLOPT_FAILONERROR, 1L);
@@ -1508,7 +1403,7 @@ int b() {
 								
 								if (stream == NULL) {
 									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-									exit(EXIT_FAILURE);
+									return EXIT_FAILURE;
 								}
 								
 								curl_easy_setopt(handle, CURLOPT_WRITEDATA, (void*) stream);
@@ -1556,7 +1451,7 @@ int b() {
 								
 								if (code != CURLE_OK) {
 									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-									exit(EXIT_FAILURE);
+									return EXIT_FAILURE;
 								}
 							}
 						}
@@ -1567,7 +1462,7 @@ int b() {
 						
 						if (stream == NULL) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 						
 						const int ok = tags_dumpf(&tags, stream);
@@ -1577,7 +1472,7 @@ int b() {
 						
 						if (!ok) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 						
 						for (size_t index = 0; index < downloads_offset; index++) {
@@ -1646,7 +1541,7 @@ int b() {
 						
 						if (exit_code != 0) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 					}
 				}
@@ -1685,7 +1580,7 @@ int b() {
 						
 						if (stream == NULL) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							exit(EXIT_FAILURE);
+							return EXIT_FAILURE;
 						}
 						
 						curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
