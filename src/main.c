@@ -13,7 +13,6 @@
 #include "callbacks.h"
 #include "types.h"
 #include "utils.h"
-#include "sha256.h"
 #include "symbols.h"
 #include "cacert.h"
 #include "m3u8.h"
@@ -181,7 +180,7 @@ static int authorize(
 		return UERR_CURL_FAILURE;
 	}
 	
-	struct Query query = {0};
+	struct Query query __attribute__((__cleanup__(query_free))) = {0};
 	
 	add_parameter(&query, "grant_type", "password");
 	add_parameter(&query, "username", user);
@@ -189,7 +188,6 @@ static int authorize(
 	
 	char* post_fields = NULL;
 	const int code = query_stringify(query, &post_fields);
-	query_free(&query);
 	
 	if (code != UERR_SUCCESS) {
 		return code;
@@ -272,14 +270,12 @@ static int get_resources(
 	struct Resources* const resources
 ) {
 	
-	struct Query query = {0};
+	struct Query query __attribute__((__cleanup__(query_free))) = {0};
 	
 	add_parameter(&query, "token", credentials->access_token);
 	
 	char* squery = NULL;
 	const int code = query_stringify(query, &squery);
-	
-	query_free(&query);
 	
 	if (code != UERR_SUCCESS) {
 		return code;
@@ -944,6 +940,17 @@ int b() {
 	*strchr(password, '\n') = '\0';
 	
 	curl_global_init(CURL_GLOBAL_ALL);
+	
+	CURLM* multi_handle = curl_multi_init();
+	
+	if (multi_handle == NULL) {
+		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+		return EXIT_FAILURE;
+	}
+	
+	curl_multi_setopt(multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, (long) 30);
+	curl_multi_setopt(multi_handle, CURLMOPT_MAX_TOTAL_CONNECTIONS, (long) 30);
+	
 	curl = curl_easy_init();
 	
 	if (curl == NULL) {
@@ -984,9 +991,7 @@ int b() {
 	
 	curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
 	
-	int code = 0;
-	
-	struct Credentials credentials = {0};
+	struct Credentials credentials __attribute__((__cleanup__(credentials_free))) = {0};
 	
 	if (authorize(username, password, &credentials) != UERR_SUCCESS) {
 		fprintf(stderr, "- Não foi possível realizar a autenticação!\r\n");
@@ -1030,6 +1035,12 @@ int b() {
 	json_object_set_new(tree, "expires_in", json_string(credentials.refresh_token));
 	
 	char* buffer = json_dumps(tree, JSON_COMPACT);
+	
+	if (buffer == NULL) {
+		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+		return EXIT_FAILURE;
+	}
+	
 	const size_t buffer_size = strlen(buffer);
 	
 	const size_t wsize = fwrite(buffer, sizeof(*buffer), buffer_size, file);
@@ -1254,16 +1265,19 @@ int b() {
 							}
 						}
 						
+						m3u8_free(&tags);
+						string_free(&string);
+						
 						CURLU* cu = curl_url();
 						curl_url_set(cu, CURLUPART_URL, media->url, 0);
 						curl_url_set(cu, CURLUPART_URL, playlist_uri, 0);
 						
-						m3u8_free(&tags);
-						
-						char* playlist_full_url = NULL;
+						char* playlist_full_url = NULL;	
 						curl_url_get(cu, CURLUPART_URL, &playlist_full_url, 0);
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
+						
+						curl_free(playlist_full_url);
 						
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
@@ -1279,16 +1293,6 @@ int b() {
 						
 						struct SegmentDownload downloads[tags.offset];
 						size_t downloads_offset = 0;
-						
-						CURLM* multi_handle = curl_multi_init();
-						
-						if (multi_handle == NULL) {
-							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-							return EXIT_FAILURE;
-						}
-						
-						curl_multi_setopt(multi_handle, CURLMOPT_MAX_HOST_CONNECTIONS, (long) 30);
-						curl_multi_setopt(multi_handle, CURLMOPT_MAX_TOTAL_CONNECTIONS, (long) 30);
 						
 						char playlist_filename[strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(LOCAL_PLAYLIST_FILENAME) + 1];
 						strcpy(playlist_filename, page_directory);
@@ -1399,7 +1403,7 @@ int b() {
 								
 								curl_free(url);
 								
-								FILE* stream = fopen(filename, "wb");
+								FILE* const stream = fopen(filename, "wb");
 								
 								if (stream == NULL) {
 									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");

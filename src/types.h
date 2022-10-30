@@ -72,5 +72,6 @@ struct String {
 };
 
 void string_free(struct String* obj);
+void credentials_free(struct Credentials* obj);
 
 #pragma once

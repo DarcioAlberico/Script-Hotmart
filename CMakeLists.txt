@@ -362,7 +362,6 @@ add_executable(
 	src/callbacks.c
 	src/main.c
 	src/query.c
-	src/sha256.c
 	src/types.c
 	src/utils.c
 	src/m3u8.c
