@@ -404,7 +404,6 @@ static int get_resources(
 			struct curl_slist* tmp = curl_slist_append(list, item);
 			
 			if (tmp == NULL) {
-				puts("@@@@@@");
 				return UERR_CURL_FAILURE;
 			}
 			
@@ -415,10 +414,8 @@ static int get_resources(
 		
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-		CURLcode code = curl_easy_perform(curl);
-		printf("%s\n", curl_easy_strerror(code));
-		if (code != CURLE_OK) {
-			puts("@@@@@@");
+		
+		if (curl_easy_perform(curl) != CURLE_OK) {
 			return UERR_CURL_FAILURE;
 		}
 		
@@ -1444,7 +1441,6 @@ int main() {
 						string_free(&string);
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
-						puts(playlist_full_url);
 						
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
