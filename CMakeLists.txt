@@ -12,6 +12,9 @@ option(SPARKLEC_ENABLE_LTO "Turn on compiler Link Time Optimizations" OFF)
 
 set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
 
+set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
+set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
+
 # curl
 set(PICKY_COMPILER OFF)
 set(BUILD_CURL_EXE OFF)
@@ -463,3 +466,4 @@ set_target_properties(
 	PROPERTIES
 	INSTALL_RPATH "$ORIGIN/../lib"
 )
+
