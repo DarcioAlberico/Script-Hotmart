@@ -1433,6 +1433,7 @@ int main() {
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
 						puts(playlist_full_url);
+						puts(playlist_uri);
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
 							return EXIT_FAILURE;
