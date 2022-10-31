@@ -1,4 +1,5 @@
 #include <stdlib.h>
+#include <string.h>
 #define A "SparkleC"
 #if defined(WIN32) && defined(UNICODE)
 	#include <stdarg.h>
@@ -1134,14 +1135,10 @@ int main() {
 		} else {
 			credentials = items[value - 1];
 		}
-		
-		//memcpy(&credentials, items[value - 1], sizeof(credentials));
 	} else {
-		puts("+===");
 		if (!ask_user_credentials(&credentials)) {
 			return EXIT_FAILURE;
 		}
-		
 		
 		FILE* const file = fopen(accounts_file, "wb");
 		
