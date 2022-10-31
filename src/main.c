@@ -1421,15 +1421,15 @@ int main() {
 							}
 						}
 						
-						m3u8_free(&tags);
-						string_free(&string);
-						
 						CURLU* cu __attribute__((__cleanup__(curlupp_free))) = curl_url();
 						curl_url_set(cu, CURLUPART_URL, media->url, 0);
 						curl_url_set(cu, CURLUPART_URL, playlist_uri, 0);
 						
 						char* playlist_full_url __attribute__((__cleanup__(curlcharpp_free))) = NULL;	
 						curl_url_get(cu, CURLUPART_URL, &playlist_full_url, 0);
+						
+						m3u8_free(&tags);
+						string_free(&string);
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
 						puts(playlist_full_url);
