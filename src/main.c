@@ -1358,8 +1358,9 @@ int main() {
 						
 						curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
 						curl_easy_setopt(curl, CURLOPT_URL, media->url);
+						curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 						curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
-						printf("%i\n", (int) curl_easy_perform(curl));
+						
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
 							return EXIT_FAILURE;
