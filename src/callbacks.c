@@ -23,8 +23,6 @@ size_t curl_write_cb(char *chunk, size_t size, size_t nmemb, struct String* stri
 	return chunk_size;
 	
 }
- 
-CURLcode 
 
 size_t curl_write_file_cb(char *chunk, size_t size, size_t nmemb, void* ptr) {
 	return fwrite(chunk, size, nmemb, (FILE*) ptr);
