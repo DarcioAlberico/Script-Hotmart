@@ -118,7 +118,7 @@ static size_t progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dl
 	
 	printf("\r+ Atualmente em progresso: %i%% / 100%%", ((dlnow * 100) / dltotal));
 	
-	if ((dlnow * 100) / dltotal) == 100) {
+	if (((dlnow * 100) / dltotal) == 100) {
 		printf("\n");
 	}
 	
