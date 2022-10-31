@@ -114,7 +114,7 @@ static void curlcharpp_free(char** ptr) {
 	curl_free(*ptr);
 }
 
-static int curl_progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+static size_t curl_progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
 	
 	printf("\r+ Atualmente em progresso: %i%% / 100%%", ((dlnow * 100) / dltotal));
 	
