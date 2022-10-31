@@ -114,6 +114,18 @@ static void curlcharpp_free(char** ptr) {
 	curl_free(*ptr);
 }
 
+static int curl_progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+	
+	printf("\r+ Atualmente em progresso: %i%% / 100%%", ((dlnow * 100) / dltotal));
+	
+	if ((dlnow * 100) / dltotal) == 100) {
+		printf("\n");
+	}
+	
+	return 0;
+	
+}
+
 static const char MP4_FILE_EXTENSION[] = "mp4";
 static const char TS_FILE_EXTENSION[] = "ts";
 static const char KEY_FILE_EXTENSION[] = "key";
@@ -1475,8 +1487,6 @@ int main() {
 								attribute_set_value(attribute, filename);
 								tag_set_uri(tag, filename);
 								
-								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
-								
 								CURL* handle = curl_easy_init();
 								
 								if (handle == NULL) {
@@ -1533,8 +1543,6 @@ int main() {
 								
 								tag_set_uri(tag, filename);
 								
-								//printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
-								
 								CURL* handle = curl_easy_init();
 								
 								if (handle == NULL) {
@@ -1578,7 +1586,7 @@ int main() {
 						}
 						
 						int still_running = 1;
-						printf("%zu aaaa", tags.offset);
+						
 						while (still_running) {
 							CURLMcode mc = curl_multi_perform(multi_handle, &still_running);
 							
@@ -1712,6 +1720,8 @@ int main() {
 					}
 				}
 				
+				curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curl_progress_callback);
+				
 				for (size_t index = 0; index < page->attachments.offset; index++) {
 					struct Attachment* attachment = &page->attachments.items[index];
 					
@@ -1764,6 +1774,8 @@ int main() {
 						}
 					}
 				}
+				
+				curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, NULL);
 			}
 			
 		}
