@@ -102,6 +102,18 @@ static void curl_slistp_free_all(struct curl_slist** ptr) {
 	curl_slist_free_all(*ptr);
 }
 
+static void charpp_free(char** ptr) {
+	free(*ptr);
+}
+
+static void curlupp_free(CURLU** ptr) {
+	curl_url_cleanup(*ptr);
+}
+
+static void curlcharpp_free(char** ptr) {
+	curl_free(*ptr);
+}
+
 static const char MP4_FILE_EXTENSION[] = "mp4";
 static const char TS_FILE_EXTENSION[] = "ts";
 static const char KEY_FILE_EXTENSION[] = "key";
@@ -166,13 +178,13 @@ static int authorize(
 	struct Credentials* const credentials
 ) {
 	
-	char* user = curl_easy_escape(NULL, username, 0);
+	char* user __attribute__((__cleanup__(curlcharpp_free))) = curl_easy_escape(NULL, username, 0);
 	
 	if (user == NULL) {
 		return UERR_CURL_FAILURE;
 	}
 	
-	char* pass = curl_easy_escape(NULL, password, 0);
+	char* pass __attribute__((__cleanup__(curlcharpp_free))) = curl_easy_escape(NULL, password, 0);
 	
 	if (pass == NULL) {
 		return UERR_CURL_FAILURE;
@@ -184,19 +196,16 @@ static int authorize(
 	add_parameter(&query, "username", user);
 	add_parameter(&query, "password", pass);
 	
-	char* post_fields = NULL;
+	char* post_fields __attribute__((__cleanup__(charpp_free))) = NULL;
 	const int code = query_stringify(query, &post_fields);
 	
 	if (code != UERR_SUCCESS) {
 		return code;
 	}
 	
-	curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, post_fields);
-	
-	free(post_fields);
-	
 	struct String string __attribute__((__cleanup__(string_free))) = {0};
 	
+	curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, post_fields);
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, curl_write_cb);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 	curl_easy_setopt(curl, CURLOPT_URL, HOTMART_TOKEN_ENDPOINT);
@@ -261,6 +270,8 @@ static int authorize(
 	
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_URL, NULL);
+	curl_easy_setopt(curl, CURLOPT_COPYPOSTFIELDS, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -275,24 +286,20 @@ static int get_resources(
 	
 	add_parameter(&query, "token", credentials->access_token);
 	
-	char* squery = NULL;
+	char* squery __attribute__((__cleanup__(charpp_free))) = NULL;
 	const int code = query_stringify(query, &squery);
 	
 	if (code != UERR_SUCCESS) {
 		return code;
 	}
 	
-	CURLU *cu = curl_url();
+	CURLU* cu __attribute__((__cleanup__(curlupp_free))) = curl_url();
 	curl_url_set(cu, CURLUPART_URL, HOTMART_TOKEN_CHECK_ENDPOINT, 0);
 	curl_url_set(cu, CURLUPART_QUERY, squery, 0);
 	
-	char* url = NULL;
+	char* url __attribute__((__cleanup__(curlcharpp_free))) = NULL;
 	curl_url_get(cu, CURLUPART_URL, &url, 0);
 	curl_easy_setopt(curl, CURLOPT_URL, url);
-	
-	curl_url_cleanup(cu);
-	curl_free(url);
-	free(squery);
 	
 	struct String string __attribute__((__cleanup__(string_free))) = {0};
 	
@@ -385,6 +392,7 @@ static int get_resources(
 			struct curl_slist* tmp = curl_slist_append(list, item);
 			
 			if (tmp == NULL) {
+				puts("@@@@@@");
 				return UERR_CURL_FAILURE;
 			}
 			
@@ -395,8 +403,10 @@ static int get_resources(
 		
 		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
-		
-		if (curl_easy_perform(curl) != CURLE_OK) {
+		CURLcode code = curl_easy_perform(curl);
+		printf("%s\n", curl_easy_strerror(code));
+		if (code != CURLE_OK) {
+			puts("@@@@@@");
 			return UERR_CURL_FAILURE;
 		}
 		
@@ -436,6 +446,7 @@ static int get_resources(
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
+	curl_easy_setopt(curl, CURLOPT_URL, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -629,6 +640,7 @@ static int get_modules(
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
+	curl_easy_setopt(curl, CURLOPT_URL, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -885,6 +897,7 @@ static int get_page(
 	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
 	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
 	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
+	curl_easy_setopt(curl, CURLOPT_URL, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -925,6 +938,11 @@ static int ask_user_credentials(struct Credentials* const obj) {
 	}
 	
 	obj->username = malloc(strlen(username) + 1);
+	
+	if (obj->username == NULL) {
+		
+	}
+	
 	strcpy(obj->username, username);
 	
 	printf("+ Usuário autenticado com sucesso!\r\n");
@@ -989,7 +1007,8 @@ int main() {
 	curl_easy_setopt(curl, CURLOPT_FAILONERROR, 1L);
 	curl_easy_setopt(curl, CURLOPT_SSL_VERIFYPEER, 0L);
 	curl_easy_setopt(curl, CURLOPT_DOH_SSL_VERIFYPEER, 0L);
-	curl_easy_setopt(curl, CURLOPT_TCP_FASTOPEN, 1L);
+	curl_easy_setopt(curl, CURLOPT_VERBOSE, 1L);
+	curl_easy_setopt(curl, CURLOPT_HTTP_VERSION, CURL_HTTP_VERSION_1_1);
 	curl_easy_setopt(curl, CURLOPT_USERAGENT, HTTP_DEFAULT_USER_AGENT);
 	curl_easy_setopt(curl, CURLOPT_IPRESOLVE, CURL_IPRESOLVE_V4);
 	
@@ -1405,16 +1424,14 @@ int main() {
 						m3u8_free(&tags);
 						string_free(&string);
 						
-						CURLU* cu = curl_url();
+						CURLU* cu __attribute__((__cleanup__(curlupp_free))) = curl_url();
 						curl_url_set(cu, CURLUPART_URL, media->url, 0);
 						curl_url_set(cu, CURLUPART_URL, playlist_uri, 0);
 						
-						char* playlist_full_url = NULL;	
+						char* playlist_full_url __attribute__((__cleanup__(curlcharpp_free))) = NULL;	
 						curl_url_get(cu, CURLUPART_URL, &playlist_full_url, 0);
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
-						
-						curl_free(playlist_full_url);
 						
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
@@ -1444,7 +1461,7 @@ int main() {
 								
 								curl_url_set(cu, CURLUPART_URL, attribute->value, 0);
 								
-								char* url = NULL;
+								char* url __attribute__((__cleanup__(curlcharpp_free))) = NULL;
 								curl_url_get(cu, CURLUPART_URL, &url, 0);
 								
 								char* filename = malloc(strlen(page_directory) + strlen(PATH_SEPARATOR) + strlen(KEY_FILE_EXTENSION) + strlen(DOT) + strlen(KEY_FILE_EXTENSION) + 1);
@@ -1502,7 +1519,7 @@ int main() {
 							} else if (tag->type == EXTINF && tag->uri != NULL) {
 								curl_url_set(cu, CURLUPART_URL, tag->uri, 0);
 								
-								char* url = NULL;
+								char* url __attribute__((__cleanup__(curlcharpp_free))) = NULL;
 								curl_url_get(cu, CURLUPART_URL, &url, 0);
 								
 								char value[intlen(segment_number) + 1];
@@ -1566,7 +1583,7 @@ int main() {
 						curl_url_cleanup(cu);
 						
 						int still_running = 1;
-						
+						printf("%zu aaaa", tags.offset);
 						while (still_running) {
 							CURLMcode mc = curl_multi_perform(multi_handle, &still_running);
 							
