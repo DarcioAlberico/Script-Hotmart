@@ -1,12 +1,11 @@
 #include <stdlib.h>
-
+#define A "SparkleC"
 #if defined(WIN32) && defined(UNICODE)
 	#include <stdarg.h>
 #endif
 
 #include <curl/curl.h>
 #include <jansson.h>
-#include <bearssl.h>
 
 #include "errors.h"
 #include "query.h"
@@ -102,16 +101,14 @@ static void curl_slistp_free_all(struct curl_slist** ptr) {
 	curl_slist_free_all(*ptr);
 }
 
-static const char JSON_FILE_EXTENSION[] = "json";
 static const char MP4_FILE_EXTENSION[] = "mp4";
 static const char TS_FILE_EXTENSION[] = "ts";
 static const char KEY_FILE_EXTENSION[] = "key";
 
 static const char LOCAL_PLAYLIST_FILENAME[] = "playlist.m3u8";
+static const char LOCAL_ACCOUNTS_FILENAME[] = "accounts.json";
 
 static const char HTTPS_SCHEME[] = "https://";
-
-static const char APP_CONFIG_DIRECTORY[] = ".config";
 
 static const char HTTP_HEADER_AUTHORIZATION[] = "Authorization";
 static const char HTTP_HEADER_REFERER[] = "Referer";
@@ -390,6 +387,9 @@ static int get_resources(
 			list = tmp;
 		}
 		
+		struct String string __attribute__((__cleanup__(string_free))) = {0};
+		
+		curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 		curl_easy_setopt(curl, CURLOPT_HTTPHEADER, list);
 		
 		if (curl_easy_perform(curl) != CURLE_OK) {
@@ -805,19 +805,8 @@ static int get_page(
 			}
 			
 			const char* const filename = json_string_value(obj);
-			const char* start = filename;
 			
-			while (1) {
-				const char* const tmp = strstr(start + 1, DOT);
-				
-				if (tmp == NULL) {
-					break;
-				}
-				
-				start = tmp;
-			}
-			
-			start++;
+			const char* const file_extension = get_file_extension(filename);
 			
 			obj = json_object_get(item, "fileMembershipId");
 			
@@ -867,7 +856,7 @@ static int get_page(
 			
 			struct Attachment attachment = {
 				.url = malloc(strlen(download_url) + 1),
-				.extension = malloc(strlen(start) + 1)
+				.extension = malloc(strlen(file_extension) + 1)
 			};
 			
 			if (attachment.url == NULL || attachment.extension == NULL) {
@@ -875,7 +864,7 @@ static int get_page(
 			}
 			
 			strcpy(attachment.url, download_url);
-			strcpy(attachment.extension, start);
+			strcpy(attachment.extension, file_extension);
 			
 			page->attachments.items[page->attachments.offset++] = attachment;
 		}
@@ -885,32 +874,7 @@ static int get_page(
 	
 }
 
-int b() {
-	
-	#ifdef WIN32
-		SetConsoleOutputCP(CP_UTF8);
-		SetConsoleCP(CP_UTF8);
-	#endif
-	
-	if (!directory_exists(APP_CONFIG_DIRECTORY)) {
-		fprintf(stderr, "- Diretório de configurações não encontrado, criando-o\r\n");
-		
-		if (!create_directory(APP_CONFIG_DIRECTORY)) {
-			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-			return EXIT_FAILURE;
-		}
-		/*
-		char* fullpath = NULL;
-		
-		if (!expand_filename(APP_CONFIG_DIRECTORY, &fullpath)) {
-			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-			return EXIT_FAILURE;
-		}
-		*/
-		
-		printf("+ Diretório de configurações criado com sucesso!\r\n");
-		
-	}
+static int ask_user_credentials(struct Credentials* const obj) {
 	
 	char username[MAX_INPUT_SIZE + 1] = {'\0'};
 	char password[MAX_INPUT_SIZE + 1] = {'\0'};
@@ -938,6 +902,53 @@ int b() {
 	}
 	
 	*strchr(password, '\n') = '\0';
+	
+	if (authorize(username, password, obj) != UERR_SUCCESS) {
+		fprintf(stderr, "- Não foi possível realizar a autenticação!\r\n");
+		return 0;
+	}
+	
+	obj->username = malloc(strlen(username) + 1);
+	strcpy(obj->username, username);
+	
+	printf("+ Usuário autenticado com sucesso!\r\n");
+	
+	return 1;
+	
+}
+
+#if defined(WIN32) && defined(UNICODE)
+	#define main wmain
+#endif
+
+int main() {
+	
+	#ifdef WIN32
+		SetConsoleOutputCP(CP_UTF8);
+		SetConsoleCP(CP_UTF8);
+	#endif
+	
+	char* const directory = get_configuration_directory();
+	
+	char configuration_directory[strlen(directory) + strlen(A) + 1];
+	strcpy(configuration_directory, directory);
+	strcat(configuration_directory, A);
+	
+	free(directory);
+	
+	if (!directory_exists(configuration_directory)) {
+		fprintf(stderr, "- Diretório de configurações não encontrado, criando-o\r\n");
+		
+		if (!create_directory(configuration_directory)) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
+		}
+	}
+	
+	char accounts_file[strlen(configuration_directory) + strlen(PATH_SEPARATOR) + strlen(LOCAL_ACCOUNTS_FILENAME) + 1];
+	strcpy(accounts_file, configuration_directory);
+	strcat(accounts_file, PATH_SEPARATOR);
+	strcat(accounts_file, LOCAL_ACCOUNTS_FILENAME);
 	
 	curl_global_init(CURL_GLOBAL_ALL);
 	
@@ -991,69 +1002,181 @@ int b() {
 	
 	curl_easy_setopt(curl, CURLOPT_RESOLVE, resolve_list);
 	
-	struct Credentials credentials __attribute__((__cleanup__(credentials_free))) = {0};
+	struct Credentials credentials = {0};
 	
-	if (authorize(username, password, &credentials) != UERR_SUCCESS) {
-		fprintf(stderr, "- Não foi possível realizar a autenticação!\r\n");
-		return EXIT_FAILURE;
-	}
-	
-	printf("+ Usuário autenticado com sucesso!\r\n");
-	
-	char hex[strlen(username) * 2 + 1];
-	size_t hex_offset = 0;
-	
-	for (size_t index = 0; index < strlen(username); index++) {
-		const char ch = username[index];
+	if (file_exists(accounts_file)) {
+		json_auto_t* tree = json_load_file(accounts_file, 0, NULL);
 		
-		hex[hex_offset++] = to_hex((ch & 0xF0) >> 4);
-		hex[hex_offset++] = to_hex((ch & 0x0F) >> 0);
+		if (tree == NULL || !json_is_array(tree)) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
+		}
+		
+		const size_t total_items = json_array_size(tree);
+		
+		if (total_items < 1) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
+		}
+		
+		struct Credentials items[total_items];
+		
+		size_t index = 0;
+		json_t *item = NULL;
+		
+		printf("+ Selecione qual das suas contas você deseja usar: \r\n\r\n");
+		printf("0.\r\nAcessar uma outra conta\r\n\r\n");
+		
+		json_array_foreach(tree, index, item) {
+			json_t* subobj = json_object_get(item, "username");
+			
+			if (subobj == NULL || !json_is_string(subobj)) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+			const char* const username = json_string_value(subobj);
+			
+			subobj = json_object_get(item, "access_token");
+			
+			if (subobj == NULL || !json_is_string(subobj)) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+			const char* const access_token = json_string_value(subobj);
+			
+			subobj = json_object_get(item, "refresh_token");
+			
+			if (subobj == NULL || !json_is_string(subobj)) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+			const char* const refresh_token = json_string_value(subobj);
+			
+			struct Credentials credentials = {
+				.access_token = malloc(strlen(access_token) + 1),
+				.refresh_token = malloc(strlen(refresh_token) + 1)
+			};
+			
+			if (credentials.access_token == NULL || credentials.refresh_token == NULL) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+			strcpy(credentials.access_token, access_token);
+			strcpy(credentials.refresh_token, refresh_token);
+			
+			items[index] = credentials;
+			
+			printf("%zu. \r\nAcessar usando a conta: '%s'\r\n\r\n", index + 1, username);
+		}
+		
+		char answer[4 + 1];
+		int value = 0;
+		
+		while (1) {
+			printf("> Digite sua escolha: ");
+			
+			if (fgets(answer, sizeof(answer), stdin) != NULL && *answer != '\n') {
+				*strchr(answer, '\n') = '\0';
+				
+				if (isnumeric(answer)) {
+					value = atoi(answer);
+					
+					if (value >= 0 && (size_t) value <= total_items) {
+						break;
+					}
+				}
+			}
+			
+			fprintf(stderr, "- Opção inválida ou não reconhecida!\r\n");
+		}
+		
+		if (value == 0) {
+			if (!ask_user_credentials(&credentials)) {
+				return EXIT_FAILURE;
+			}
+			
+			FILE* const file = fopen(accounts_file, "wb");
+			
+			if (file == NULL) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+			json_auto_t* subtree = json_object();
+			json_object_set_new(subtree, "username", json_string(credentials.username));
+			json_object_set_new(subtree, "access_token", json_string(credentials.access_token));
+			json_object_set_new(subtree, "refresh_token", json_string(credentials.refresh_token));
+			
+			json_array_append(tree, subtree);
+			
+			char* const buffer = json_dumps(tree, JSON_COMPACT);
+			
+			if (buffer == NULL) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+			const size_t buffer_size = strlen(buffer);
+			const size_t wsize = fwrite(buffer, sizeof(*buffer), buffer_size, file);
+			
+			free(buffer);
+			fclose(file);
+			
+			if (wsize != buffer_size) {
+				fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+				return EXIT_FAILURE;
+			}
+			
+		} else {
+			credentials = items[value - 1];
+		}
+		
+		//memcpy(&credentials, items[value - 1], sizeof(credentials));
+	} else {
+		puts("+===");
+		if (!ask_user_credentials(&credentials)) {
+			return EXIT_FAILURE;
+		}
+		
+		
+		FILE* const file = fopen(accounts_file, "wb");
+		
+		if (file == NULL) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
+		}
+		
+		json_auto_t* tree = json_array();
+		json_auto_t* obj = json_object();
+		json_object_set_new(obj, "username", json_string(credentials.username));
+		json_object_set_new(obj, "access_token", json_string(credentials.access_token));
+		json_object_set_new(obj, "refresh_token", json_string(credentials.refresh_token));
+		
+		json_array_append(tree, obj);
+		
+		char* const buffer = json_dumps(tree, JSON_COMPACT);
+		
+		if (buffer == NULL) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
+		}
+		
+		const size_t buffer_size = strlen(buffer);
+		const size_t wsize = fwrite(buffer, sizeof(*buffer), buffer_size, file);
+		
+		free(buffer);
+		fclose(file);
+		
+		if (wsize != buffer_size) {
+			fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+			return EXIT_FAILURE;
+		}
+		
 	}
-	
-	hex[hex_offset] = '\0';
-	
-	char filename[strlen(APP_CONFIG_DIRECTORY) + strlen(SLASH) + strlen(hex) + strlen(DOT) + strlen(JSON_FILE_EXTENSION) + 1];
-	strcpy(filename, APP_CONFIG_DIRECTORY);
-	strcat(filename, SLASH);
-	strcat(filename, hex);
-	strcat(filename, DOT);
-	strcat(filename, JSON_FILE_EXTENSION);
-	
-	printf("+ Exportando arquivo de credenciais\r\n");
-	
-	FILE* file = fopen(filename, "wb");
-	
-	if (file == NULL) {
-		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-		return EXIT_FAILURE;
-	}
-	
-	json_auto_t* tree = json_object();
-	json_object_set_new(tree, "username", json_string(username));
-	json_object_set_new(tree, "access_token", json_string(credentials.access_token));
-	json_object_set_new(tree, "refresh_token", json_string(credentials.refresh_token));
-	json_object_set_new(tree, "expires_in", json_string(credentials.refresh_token));
-	
-	char* buffer = json_dumps(tree, JSON_COMPACT);
-	
-	if (buffer == NULL) {
-		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-		return EXIT_FAILURE;
-	}
-	
-	const size_t buffer_size = strlen(buffer);
-	
-	const size_t wsize = fwrite(buffer, sizeof(*buffer), buffer_size, file);
-	
-	free(buffer);
-	fclose(file);
-	
-	if (wsize != buffer_size) {
-		fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-		return EXIT_FAILURE;
-	}
-	
-	printf("+ Arquivo de credenciais exportado com sucesso!\r\n");
 	
 	printf("+ Obtendo lista de produtos\r\n");
 	
@@ -1608,12 +1731,4 @@ int b() {
 	}
 	
 	return 0;
-}
-
-#if defined(WIN32) && defined(UNICODE)
-	#define main wmain
-#endif
-
-int main() {
-	printf("%i\n", b());
 }

@@ -1,6 +1,7 @@
 #include <stdlib.h>
 
 struct Credentials {
+	char* username;
 	char* access_token;
 	char* refresh_token;
 	int expires_in;

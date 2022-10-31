@@ -4,6 +4,7 @@
 #include <ctype.h>
 
 #include "symbols.h"
+#include "utils.h"
 
 #ifdef _WIN32
 	#include <windows.h>
@@ -18,6 +19,172 @@
 static const char INVALID_FILENAME_CHARS[] = {
 	'"', ' ', '/', '\\', ':', '*', '?', '\"', '<', '>', '|', '^', '\x00'
 };
+
+int walk_dir_init(struct WalkDir* obj, const char* const pattern) {
+	
+	#ifdef _WIN32
+		#ifdef UNICODE
+			const int wcsize = MultiByteToWideChar(CP_UTF8, 0, pattern, -1, NULL, 0);
+			wchar_t wpattern[wcsize];
+			MultiByteToWideChar(CP_UTF8, 0, pattern, -1, wpattern, wcsize);
+			
+			obj->handle = FindFirstFileW(wpattern, &obj->data);
+			
+			if (obj->handle == INVALID_HANDLE_VALUE) {
+				return 0;
+			}
+		#else
+			obj->handle = FindFirstFileA(pattern, &obj->data);
+			
+			if (obj->handle == INVALID_HANDLE_VALUE) {
+				return 0;
+			}
+		#endif
+	#else
+		if (glob(pattern, 0, NULL, &obj->data) != 0) {
+			return 0;
+		}
+	#endif
+	
+	return 1;
+	
+}
+
+const char* walk_dir(struct WalkDir* obj) {
+	
+	if (obj->last_path != NULL) {
+		free(obj->last_path);
+		obj->last_path = NULL;
+	}
+	
+	#ifdef _WIN32
+		#ifdef UNICODE
+			if (obj->index++ == 0) {
+				const int size = WideCharToMultiByte(CP_UTF8, 0, obj->data.cFileName, wcslen(obj->data.cFileName), NULL, 0, NULL, NULL);
+				
+				obj->last_path = malloc(size);
+				
+				if (obj->last_path == NULL) {
+					return NULL;
+				}
+				
+				WideCharToMultiByte(CP_UTF8, 0, obj->data.cFileName, -1, obj->last_path, size, NULL, NULL);
+			} else {
+				if (FindNextFileW(obj->handle, &obj->data) == 0) {
+					FindClose(obj->handle);
+					return NULL;
+				}
+				
+				const int size = WideCharToMultiByte(CP_UTF8, 0, obj->data.cFileName, wcslen(obj->data.cFileName), NULL, 0, NULL, NULL);
+				
+				obj->last_path = malloc(size);
+				
+				if (obj->last_path == NULL) {
+					return NULL;
+				}
+				
+				WideCharToMultiByte(CP_UTF8, 0, obj->data.cFileName, -1, obj->last_path, size, NULL, NULL);
+			}
+		#else
+			if (obj->index++ == 0) {
+				obj->last_path = malloc(strlen(obj->data.cFileName) + 1);
+				
+				if (obj->last_path == NULL) {
+					return NULL;
+				}
+				
+				strcpy(obj->last_path, obj->data.cFileName);
+			} else {
+				if (FindNextFileW(obj->handle, &obj->data) == 0) {
+					FindClose(obj->handle);
+					return NULL;
+				}
+				
+				obj->last_path = malloc(strlen(obj->data.cFileName) + 1);
+				
+				if (obj->last_path == NULL) {
+					return NULL;
+				}
+				
+				strcpy(obj->last_path, obj->data.cFileName);
+			}
+		#endif
+	#else
+		if (obj->index == obj->data.gl_pathc) {
+			globfree(&obj->data);
+			return NULL;
+		}
+		
+		const char* const filename = obj->data.gl_pathv[obj->index++];
+		
+		obj->last_path = malloc(strlen(filename) + 1);
+		
+		if (obj->last_path == NULL) {
+			return NULL;
+		}
+		
+		strcpy(obj->last_path, filename);
+	#endif
+	
+	return obj->last_path;
+	
+}
+
+static const char* basename(const char* const path) {
+	/*
+	Returns the final component of a pathname.
+	*/
+	
+	const char* last_comp = path;
+	
+	while (1) {
+		char* slash_at = strchr(last_comp, *SLASH);
+		
+		if (slash_at == NULL) {
+			break;
+		}
+		
+		last_comp = slash_at + 1;
+	}
+	
+	return last_comp;
+	
+}
+
+const char* get_file_extension(const char* const filename) {
+	
+	if (*filename == '\0') {
+		return NULL;
+	}
+	
+	const char* const last_part = basename(filename);
+	
+	const char* start = strstr(last_part, DOT);
+	
+	if (start == NULL) {
+		return NULL;
+	}
+	
+	while (1) {
+		const char* const tmp = strstr(start + 1, DOT);
+		
+		if (tmp == NULL) {
+			break;
+		}
+		
+		start = tmp;
+	}
+	
+	if (start == filename) {
+		return NULL;
+	}
+	
+	start++;
+	
+	return start;
+	
+}
+			
 
 int execute_shell_command(const char* const command) {
 	
@@ -268,7 +435,7 @@ int directory_exists(const char* const directory) {
 }
 
 int file_exists(const char* const filename) {
-	return 1;
+	
 	/*
 	Returns 1 (true) if file exists and is a regular file or symlink, 0 (false) otherwise.
 	Directories, device files, named pipes and sockets return false.
@@ -358,68 +525,3 @@ int create_directory(const char* const directory) {
 	return 1;
 	
 }
-
-int iter(const char* const directory) {
-	
-	
-	#ifdef _WIN32
-		WIN32_FIND_DATA data = {};
-		const HANDLE handle = FindFirstFileA(directory, &data);
-		
-		if (handle == INVALID_HANDLE_VALUE) {
-			return 0;
-		}
-		
-		while (1) {
-			puts(data.cFileName);
-			
-			if (FindNextFileA(handle, &data) == 0) {
-				FindClose(handle);
-				
-				if (GetLastError() == ERROR_NO_MORE_FILES) {
-					break;
-				}
-				
-				return 0;
-			}
-		}
-		
-		FindClose(handle);
-		
-	#else
-		glob_t glb = {0};
-		
-		if (glob(directory, 0, NULL, &glb) != 0) {
-			return 0;
-		}
-		
-		for (size_t index = 0; index < glb.gl_pathc; index++) {
-			const char* const filename = glb.gl_pathv[index];
-			puts(filename);
-		}
-		
-		globfree(&glb);
-	#endif
-	
-	return 0;
-}
-/*
-int main() {
-	
-	#ifdef _WIN32
-		SetConsoleOutputCP(CP_UTF8);
-		SetConsoleCP(CP_UTF8);
-	#endif
-	printf(("äAAàA"));
-	printf("\r\n");
-	printf("directory_exists -> %i\n", directory_exists("b"));
-	create_directory("/home/snow/b/b/b");
-	iter("./*");
-}
-
-int main(void) {
-	char* a;
-	expand_filename(".", &a);
-	puts(a);
-}
-*/
