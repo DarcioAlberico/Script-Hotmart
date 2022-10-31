@@ -1341,8 +1341,8 @@ int main() {
 						
 						struct String string __attribute__((__cleanup__(string_free))) = {0};
 						
+						curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
 						curl_easy_setopt(curl, CURLOPT_URL, media->url);
-						puts(media->url);
 						curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
 						
 						if (curl_easy_perform(curl) != CURLE_OK) {
