@@ -458,10 +458,8 @@ foreach(target sparklec bearssl jansson libcurl)
 	)
 endforeach()
 
-if (UNIX)
-	set_target_properties(
-		sparklec
-		PROPERTIES
-		INSTALL_RPATH "$ORIGIN/../lib"
-	)
-endif()
+set_target_properties(
+	sparklec
+	PROPERTIES
+	INSTALL_RPATH "$ORIGIN/../lib"
+)
