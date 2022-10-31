@@ -1598,15 +1598,37 @@ int main() {
 						CURLMsg* msg = NULL;
 						int msgs_left = 0;
 						
+						CURLcode code = 0;
+						
 						while ((msg = curl_multi_info_read(multi_handle, &msgs_left))) {
 							if (msg->msg == CURLMSG_DONE) {
-								const CURLcode code = msg->data.result;
+								code = msg->data.result;
 								
 								if (code != CURLE_OK) {
-									fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
-									return EXIT_FAILURE;
+									break;
 								}
 							}
+						}
+						
+						for (size_t index = 0; index < downloads_offset; index++) {
+							struct SegmentDownload* download = &downloads[index];
+							
+							fclose(download->stream);
+							
+							curl_multi_remove_handle(multi_handle, download->handle);
+							curl_easy_cleanup(download->handle);
+						}
+						
+						if (code != CURLE_OK) {
+							for (size_t index = 0; index < downloads_offset; index++) {
+								struct SegmentDownload* download = &downloads[index];
+								
+								remove_file(download->filename);
+								free(download->filename);
+							}
+						
+							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
+							return EXIT_FAILURE;
 						}
 						
 						printf("+ Exportando lista de reprodução para '%s'\r\n", playlist_filename);
@@ -1628,16 +1650,7 @@ int main() {
 							return EXIT_FAILURE;
 						}
 						
-						for (size_t index = 0; index < downloads_offset; index++) {
-							struct SegmentDownload* download = &downloads[index];
-							
-							fclose(download->stream);
-							
-							curl_multi_remove_handle(multi_handle, download->handle);
-							curl_easy_cleanup(download->handle);
-						}
-						
-						curl_multi_cleanup(multi_handle);
+						//curl_multi_cleanup(multi_handle);
 						
 						char output_file[strlen(QUOTATION_MARK) * 2 + strlen(media_filename) + 1];
 						strcpy(output_file, QUOTATION_MARK);
