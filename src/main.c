@@ -1495,8 +1495,6 @@ int main() {
 								curl_easy_setopt(handle, CURLOPT_RESOLVE, resolve_list);
 								curl_easy_setopt(handle, CURLOPT_URL, url);
 								
-								curl_free(url);
-								
 								FILE* const stream = fopen(filename, "wb");
 								
 								if (stream == NULL) {
@@ -1555,8 +1553,6 @@ int main() {
 								curl_easy_setopt(handle, CURLOPT_RESOLVE, resolve_list);
 								curl_easy_setopt(handle, CURLOPT_URL, url);
 								
-								curl_free(url);
-								
 								FILE* const stream = fopen(filename, "wb");
 								
 								if (stream == NULL) {
@@ -1579,8 +1575,6 @@ int main() {
 							}
 							
 						}
-						
-						curl_url_cleanup(cu);
 						
 						int still_running = 1;
 						printf("%zu aaaa", tags.offset);
