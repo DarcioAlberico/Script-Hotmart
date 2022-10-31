@@ -38,7 +38,11 @@ option(JANSSON_BUILD_DOCS OFF)
 set(JANSSON_BUILD_SHARED_LIBS ON CACHE BOOL "")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-	add_link_options(-s -Wl,-rpath,/usr/libggggg32)
+	add_link_options(-s)
+endif()
+
+if (UNIX)
+	add_link_options(-Wl,-rpath,/usr/libggggg32)
 endif()
 
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
