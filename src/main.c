@@ -114,7 +114,7 @@ static void curlcharpp_free(char** ptr) {
 	curl_free(*ptr);
 }
 
-static size_t curl_progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
+static size_t progress_callback(void *clientp, curl_off_t dltotal, curl_off_t dlnow, curl_off_t ultotal, curl_off_t ulnow) {
 	
 	printf("\r+ Atualmente em progresso: %i%% / 100%%", ((dlnow * 100) / dltotal));
 	
@@ -1720,7 +1720,7 @@ int main() {
 					}
 				}
 				
-				curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, curl_progress_callback);
+				curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progress_callback);
 				
 				for (size_t index = 0; index < page->attachments.offset; index++) {
 					struct Attachment* attachment = &page->attachments.items[index];
