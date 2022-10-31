@@ -259,6 +259,9 @@ static int authorize(
 	strcpy(credentials->access_token, access_token);
 	strcpy(credentials->refresh_token, refresh_token);
 	
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	
 	return UERR_SUCCESS;
 	
 }
@@ -429,6 +432,10 @@ static int get_resources(
 		
 		resources->items[resources->offset++] = resource;
 	}
+	
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -618,6 +625,10 @@ static int get_modules(
 		
 		resource->modules.items[resource->modules.offset++] = module;
 	}
+	
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -870,6 +881,10 @@ static int get_page(
 			page->attachments.items[page->attachments.offset++] = attachment;
 		}
 	}
+	
+	curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, NULL);
+	curl_easy_setopt(curl, CURLOPT_WRITEDATA, NULL);
+	curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
 	
 	return UERR_SUCCESS;
 	
@@ -1344,7 +1359,7 @@ int main() {
 						curl_easy_setopt(curl, CURLOPT_HTTPHEADER, NULL);
 						curl_easy_setopt(curl, CURLOPT_URL, media->url);
 						curl_easy_setopt(curl, CURLOPT_WRITEDATA, &string);
-						
+						printf("%i\n", (int) curl_easy_perform(curl));
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
 							return EXIT_FAILURE;
@@ -1419,7 +1434,7 @@ int main() {
 						strcpy(playlist_filename, page_directory);
 						strcat(playlist_filename, PATH_SEPARATOR);
 						strcat(playlist_filename, LOCAL_PLAYLIST_FILENAME);
-						
+						printf("%zu aaaa", tags.offset);
 						for (size_t index = 0; index < tags.offset; index++) {
 							struct Tag* tag = &tags.items[index];
 							
