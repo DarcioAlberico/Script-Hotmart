@@ -1533,7 +1533,7 @@ int main() {
 								
 								tag_set_uri(tag, filename);
 								
-								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
+								//printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
 								
 								CURL* handle = curl_easy_init();
 								
