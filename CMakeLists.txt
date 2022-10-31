@@ -12,9 +12,6 @@ option(SPARKLEC_ENABLE_LTO "Turn on compiler Link Time Optimizations" OFF)
 
 set(CMAKE_POLICY_DEFAULT_CMP0069 NEW)
 
-set(CMAKE_INSTALL_RPATH "$ORIGIN/../lib")
-set(CMAKE_INSTALL_RPATH_USE_LINK_PATH TRUE)
-
 # curl
 set(PICKY_COMPILER OFF)
 set(BUILD_CURL_EXE OFF)
@@ -41,7 +38,7 @@ option(JANSSON_BUILD_DOCS OFF)
 set(JANSSON_BUILD_SHARED_LIBS ON CACHE BOOL "")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-	add_link_options(-s)
+	add_link_options(-s -Wl,-rpath,/usr/libggggg32)
 endif()
 
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
@@ -448,7 +445,6 @@ endif()
 
 target_link_libraries(
 	sparklec
-	bearssl
 	jansson
 	libcurl
 )
@@ -460,10 +456,3 @@ foreach(target sparklec bearssl jansson libcurl)
 		LIBRARY DESTINATION lib
 	)
 endforeach()
-
-set_target_properties(
-	sparklec
-	PROPERTIES
-	INSTALL_RPATH "$ORIGIN/../lib"
-)
-
