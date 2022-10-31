@@ -1475,7 +1475,7 @@ int main() {
 								attribute_set_value(attribute, filename);
 								tag_set_uri(tag, filename);
 								
-								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
+								//printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
 								
 								CURL* handle = curl_easy_init();
 								
