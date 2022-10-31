@@ -1433,7 +1433,7 @@ int main() {
 						
 						curl_easy_setopt(curl, CURLOPT_URL, playlist_full_url);
 						puts(playlist_full_url);
-						printf("playlist_uri -> %s\n", playlist_uri);
+						
 						if (curl_easy_perform(curl) != CURLE_OK) {
 							fprintf(stderr, "- Ocorreu uma falha inesperada!\r\n");
 							return EXIT_FAILURE;
@@ -1453,7 +1453,7 @@ int main() {
 						strcpy(playlist_filename, page_directory);
 						strcat(playlist_filename, PATH_SEPARATOR);
 						strcat(playlist_filename, LOCAL_PLAYLIST_FILENAME);
-						printf("%zu aaaa", tags.offset);
+						
 						for (size_t index = 0; index < tags.offset; index++) {
 							struct Tag* tag = &tags.items[index];
 							
@@ -1475,7 +1475,7 @@ int main() {
 								attribute_set_value(attribute, filename);
 								tag_set_uri(tag, filename);
 								
-								//printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
+								printf("+ Baixando de '%s' para '%s'\r\n", url, filename);
 								
 								CURL* handle = curl_easy_init();
 								
