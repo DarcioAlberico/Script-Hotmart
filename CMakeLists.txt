@@ -41,10 +41,6 @@ if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel
 	add_link_options(-s)
 endif()
 
-if (UNIX) 
-	add_link_options(-Wl,--no-copy-dt-needed-entries -Wl,--no-as-needed)
-endif()
-
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
 	add_compile_options(-Oz)
 endif()
@@ -360,10 +356,7 @@ set(BEARSSL_LIBRARY $<TARGET_FILE:bearssl>)
 
 add_subdirectory(submodules/curl EXCLUDE_FROM_ALL)
 add_subdirectory(submodules/jansson EXCLUDE_FROM_ALL)
-set_target_properties(
-	jansson
-	PROPERTIES NO_SONAME 1
-)
+
 add_executable(
 	sparklec
 	src/callbacks.c
@@ -430,12 +423,6 @@ elseif (UNIX)
 		)
 	endforeach()
 endif()
-
-set_target_properties(
-	jansson
-	PROPERTIES
-	NO_SONAME 0
-)
 
 foreach(property RUNTIME_OUTPUT_DIRECTORY LIBRARY_OUTPUT_DIRECTORY)
 	foreach(target jansson libcurl)
