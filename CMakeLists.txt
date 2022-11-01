@@ -38,7 +38,7 @@ option(JANSSON_BUILD_DOCS OFF)
 set(JANSSON_BUILD_SHARED_LIBS ON CACHE BOOL "")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-	add_link_options(-s)
+	add_link_options(-s -Wl,--no-as-needed)
 endif()
 
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
@@ -356,7 +356,10 @@ set(BEARSSL_LIBRARY $<TARGET_FILE:bearssl>)
 
 add_subdirectory(submodules/curl EXCLUDE_FROM_ALL)
 add_subdirectory(submodules/jansson EXCLUDE_FROM_ALL)
-
+set_target_properties(
+	jansson
+	PROPERTIES NO_SONAME 1
+)
 add_executable(
 	sparklec
 	src/callbacks.c
@@ -482,6 +485,6 @@ foreach(target sparklec bearssl jansson libcurl)
 	install(
 		TARGETS ${target}
 		RUNTIME DESTINATION bin
-		LIBRARY DESTINATION lib
+		LIBRARY DESTINATION lib NAMELINK_SKIP
 	)
 endforeach()
