@@ -24,8 +24,6 @@ jobs:
     - name: Post setup settings for Android cross compiler
       run: |
         echo 'ANDROID_HOME=${{ steps.setup-ndk.outputs.ndk-path }}' >> "${GITHUB_ENV}"
-        ls /usr/share/cmake
-        sudo sed -i 's/set(CMAKE_SHARED_LIBRARY_RUNTIME_C_FLAG "")//g' '/usr/share/cmake/Modules/Platform/Android.cmake'
     - name: Setup Windows cross compiler
       run: |
         declare -r LLVM_MINGW_TAG="$(jq --raw-output '.tag_name' <<< "$(curl --silent --url 'https://api.github.com/repos/mstorsjo/llvm-mingw/releases/latest')")"

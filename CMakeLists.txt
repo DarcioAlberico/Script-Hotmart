@@ -45,7 +45,9 @@ if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeR
 	add_compile_options(-Oz)
 endif()
 
-add_link_options("-Wl,-rpath,\${ORIGIN}")
+if (ANDROID)
+	set(CMAKE_SHARED_LIBRARY_RUNTIME_C_FLAG "-Wl,-rpath,")
+endif()
 
 include_directories(
 	src
