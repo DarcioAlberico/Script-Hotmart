@@ -38,7 +38,11 @@ option(JANSSON_BUILD_DOCS OFF)
 set(JANSSON_BUILD_SHARED_LIBS ON CACHE BOOL "")
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
-	add_link_options(-s -Wl,--no-as-needed)
+	add_link_options(-s)
+endif()
+
+if (UNIX) 
+	add_link_options(-Wl,--no-copy-dt-needed-entries -Wl,--no-as-needed)
 endif()
 
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
@@ -430,7 +434,7 @@ endif()
 set_target_properties(
 	jansson
 	PROPERTIES
-	NO_SONAME 1
+	NO_SONAME 0
 )
 
 foreach(property RUNTIME_OUTPUT_DIRECTORY LIBRARY_OUTPUT_DIRECTORY)
@@ -488,3 +492,4 @@ foreach(target sparklec bearssl jansson libcurl)
 		LIBRARY DESTINATION lib NAMELINK_SKIP
 	)
 endforeach()
+
