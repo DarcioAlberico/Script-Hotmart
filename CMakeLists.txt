@@ -35,19 +35,17 @@ set(CURL_WERROR OFF)
 
 # jansson
 option(JANSSON_BUILD_DOCS OFF)
-set(JANSSON_BUILD_SHARED_LIBS ON CACHE BOOL "")
+set(BUILD_SHARED_LIBS ON)
 
 if (CMAKE_BUILD_TYPE STREQUAL "Release" OR CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
 	add_link_options(-s)
 endif()
 
-if (UNIX)
-	add_link_options(-Wl,-rpath,/usr/libggggg32)
-endif()
-
 if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeRel")
 	add_compile_options(-Oz)
 endif()
+
+add_link_options("-Wl,-rpath,\${ORIGIN}")
 
 include_directories(
 	src
@@ -459,4 +457,23 @@ foreach(target sparklec bearssl jansson libcurl)
 		RUNTIME DESTINATION bin
 		LIBRARY DESTINATION lib
 	)
+	
 endforeach()
+
+if (APPLE)
+	foreach(property BUILD_RPATH INSTALL_RPATH)
+		set_target_properties(
+			sparklec
+			PROPERTIES
+			${property} "@loader_path/../lib:@loader_path"
+		)
+	endforeach()
+elseif (UNIX)
+	foreach(property BUILD_RPATH INSTALL_RPATH)
+		set_target_properties(
+			sparklec
+			PROPERTIES
+			${property} "$ORIGIN/../lib:$ORIGIN"
+		)
+	endforeach()
+endif()
