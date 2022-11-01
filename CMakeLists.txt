@@ -367,6 +367,24 @@ add_executable(
 	src/m3u8.c
 )
 
+if (APPLE)
+	foreach(property BUILD_RPATH INSTALL_RPATH)
+		set_target_properties(
+			sparklec
+			PROPERTIES
+			${property} "@loader_path/../lib:@loader_path"
+		)
+	endforeach()
+elseif (UNIX)
+	foreach(property BUILD_RPATH INSTALL_RPATH)
+		set_target_properties(
+			sparklec
+			PROPERTIES
+			${property} "$ORIGIN/../lib:$ORIGIN"
+		)
+	endforeach()
+endif()
+
 if (ANDROID)
 	target_include_directories(
 		sparklec
@@ -387,6 +405,24 @@ set_target_properties(
 	PROPERTIES
 	IMPORTED_LOCATION $<TARGET_FILE:bearssl>
 )
+
+if (APPLE)
+	foreach(property BUILD_RPATH INSTALL_RPATH)
+		set_target_properties(
+			libcurl
+			PROPERTIES
+			${property} "@loader_path"
+		)
+	endforeach()
+elseif (UNIX)
+	foreach(property BUILD_RPATH INSTALL_RPATH)
+		set_target_properties(
+			libcurl
+			PROPERTIES
+			${property} "$ORIGIN"
+		)
+	endforeach()
+endif()
 
 set_target_properties(
 	jansson
@@ -432,7 +468,6 @@ if (SPARKLEC_ENABLE_LTO)
 	check_ipo_supported(RESULT SPARKLEC_HAS_LTO LANGUAGES C)
 	
 	if (SPARKLEC_HAS_LTO)
-		
 		foreach(target sparklec bearssl jansson libcurl)
 			set_target_properties(
 				${target}
@@ -455,22 +490,4 @@ foreach(target sparklec bearssl jansson libcurl)
 		RUNTIME DESTINATION bin
 		LIBRARY DESTINATION lib
 	)
-	
-	if (APPLE)
-		foreach(property BUILD_RPATH INSTALL_RPATH)
-			set_target_properties(
-				${target}
-				PROPERTIES
-				${property} "@loader_path/../lib:@loader_path"
-			)
-		endforeach()
-	elseif (UNIX)
-		foreach(property BUILD_RPATH INSTALL_RPATH)
-			set_target_properties(
-				${target}
-				PROPERTIES
-				${property} "$ORIGIN/../lib:$ORIGIN"
-			)
-		endforeach()
-	endif()
 endforeach()
