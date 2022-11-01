@@ -430,6 +430,16 @@ set_target_properties(
 	NO_SONAME 1
 )
 
+foreach(property RUNTIME_OUTPUT_DIRECTORY LIBRARY_OUTPUT_DIRECTORY)
+	foreach(target jansson libcurl)
+		set_target_properties(
+			${target}
+			PROPERTIES
+			${property} $<TARGET_FILE_DIR:sparklec>
+		)
+	endforeach()
+endforeach()
+
 if (WIN32)
 	target_compile_definitions(
 		sparklec
@@ -443,22 +453,6 @@ if (WIN32)
 		PRIVATE
 		-municode
 	)
-	
-	foreach(target jansson libcurl)
-		set_target_properties(
-			${target}
-			PROPERTIES
-			RUNTIME_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
-		)
-	endforeach()
-else()
-	foreach(target jansson libcurl)
-		set_target_properties(
-			${target}
-			PROPERTIES
-			LIBRARY_OUTPUT_DIRECTORY $<TARGET_FILE_DIR:sparklec>
-		)
-	endforeach()
 endif()
 
 if (SPARKLEC_ENABLE_LTO)
