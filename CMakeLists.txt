@@ -45,10 +45,6 @@ if (CMAKE_C_COMPILER_ID STREQUAL "Clang" AND CMAKE_BUILD_TYPE STREQUAL "MinSizeR
 	add_compile_options(-Oz)
 endif()
 
-if (ANDROID)
-	set(CMAKE_SHARED_LIBRARY_RUNTIME_C_FLAG "-Wl,-rpath,")
-endif()
-
 include_directories(
 	src
 	submodules/bearssl/src
@@ -460,22 +456,21 @@ foreach(target sparklec bearssl jansson libcurl)
 		LIBRARY DESTINATION lib
 	)
 	
+	if (APPLE)
+		foreach(property BUILD_RPATH INSTALL_RPATH)
+			set_target_properties(
+				${target}
+				PROPERTIES
+				${property} "@loader_path/../lib:@loader_path"
+			)
+		endforeach()
+	elseif (UNIX)
+		foreach(property BUILD_RPATH INSTALL_RPATH)
+			set_target_properties(
+				${target}
+				PROPERTIES
+				${property} "$ORIGIN/../lib:$ORIGIN"
+			)
+		endforeach()
+	endif()
 endforeach()
-
-if (APPLE)
-	foreach(property BUILD_RPATH INSTALL_RPATH)
-		set_target_properties(
-			sparklec
-			PROPERTIES
-			${property} "@loader_path/../lib:@loader_path"
-		)
-	endforeach()
-elseif (UNIX)
-	foreach(property BUILD_RPATH INSTALL_RPATH)
-		set_target_properties(
-			sparklec
-			PROPERTIES
-			${property} "$ORIGIN/../lib:$ORIGIN"
-		)
-	endforeach()
-endif()
