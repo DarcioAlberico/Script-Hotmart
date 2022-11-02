@@ -35,6 +35,15 @@ jobs:
         tar --directory="$(dirname "${LLVM_MINGW_TARBALL}")" --extract --file="${LLVM_MINGW_TARBALL}"
         
         echo "LLVM_MINGW_HOME=$(dirname "${LLVM_MINGW_TARBALL}")/$(basename "${LLVM_MINGW_URL}" '.tar.xz')" >> "${GITHUB_ENV}"
+    - name: Setup MacOS X cross compiler
+      run: |
+        git clone --depth='1' 'https://github.com/Kartatz/MacOSXCross.git'
+        cd './MacOSXCross'
+        
+        tar --strip='1' --extract --file='OSXCross.tar.gz'
+        SDK_VERSION='10.10' OSX_VERSION_MIN='10.6' ./build.sh <<< ''
+        
+        echo "OSXCROSS_HOME=$(realpath './target')" >> "${GITHUB_ENV}"
     - name: Build with CMake
       run: |
         declare -r MACHINE_HOST="$(gcc -dumpmachine)"
@@ -46,9 +55,11 @@ jobs:
             arm-linux-gnueabi
             armv7-w64-mingw32
             armv7a-linux-androideabi
+            i386-apple-darwin
             i686-linux-android
             i686-linux-gnu
             i686-w64-mingw32
+            x86_64-apple-darwin
             x86_64-linux-android
             x86_64-w64-mingw32
             "${MACHINE_HOST}"
