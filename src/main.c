@@ -566,9 +566,22 @@ static int get_modules(
 		
 		const char* const name = json_string_value(obj);
 		
+		obj = json_object_get(item, "locked");
+		
+		if (obj == NULL) {
+			return UERR_JSON_MISSING_REQUIRED_KEY;
+		}
+		
+		if (!json_is_boolean(obj)) {
+			return UERR_JSON_NON_MATCHING_TYPE;
+		}
+		
+		const int is_locked = json_boolean_value(obj);
+		
 		struct Module module = {
 			.id = malloc(strlen(id) + 1),
-			.name = malloc(strlen(name) + 1)
+			.name = malloc(strlen(name) + 1),
+			.is_locked = is_locked
 		};
 		
 		if (module.id == NULL || module.name == NULL) {
@@ -1258,19 +1271,19 @@ int main() {
 		fprintf(stderr, "- Opção inválida ou não reconhecida!\r\n");
 	}
 	
-	struct Resource* download_queue[resources.offset];
+	struct Resource download_queue[resources.offset];
 	
 	size_t queue_count = 0;
 	
 	if (value == 0) {
 		for (size_t index = 0; index < sizeof(download_queue) / sizeof(*download_queue); index++) {
-			struct Resource* resource = &resources.items[index];
+			struct Resource resource = resources.items[index];
 			download_queue[index] = resource;
 			
 			queue_count++;
 		}
 	} else {
-		struct Resource* resource = &resources.items[value - 1];
+		struct Resource resource = resources.items[value - 1];
 		*download_queue = resource;
 		
 		queue_count++;
@@ -1284,7 +1297,7 @@ int main() {
 	}
 	
 	for (size_t index = 0; index < queue_count; index++) {
-		struct Resource* resource = &resources.items[index];
+		struct Resource* resource = &download_queue[index];
 		
 		printf("+ Obtendo lista de módulos do produto '%s'\r\n", resource->name);
 		
@@ -1315,6 +1328,11 @@ int main() {
 			struct Module* module = &resource->modules.items[index];
 			
 			printf("+ Verificando estado do módulo '%s'\r\n", module->name);
+			
+			if (module->is_locked) {
+				fprintf(stderr, "- Módulo inacessível, pulando para o próximo\r\n");
+				continue;
+			}
 			
 			char directory[strlen(module->name) + 1];
 			strcpy(directory, module->name);

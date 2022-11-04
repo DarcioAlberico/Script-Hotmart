@@ -45,6 +45,7 @@ struct Module {
 	char* id;
 	char* name;
 	char* download_location;
+	int is_locked;
 	struct Pages pages;
 };
 
